@@ -131,7 +131,7 @@ class _ClipboardShortcutFilter(QObject):
 class MeadowPyApp:
     """Application controller. Sets up QApplication, loads settings, shows main window."""
 
-    _MINIMUM_SPLASH_SECONDS = 5.0
+    _MINIMUM_SPLASH_SECONDS = 1.5
 
     def __init__(self, argv: list[str]):
         self._qapp = QApplication(argv)

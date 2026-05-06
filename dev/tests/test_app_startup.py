@@ -332,7 +332,7 @@ def test_app_icon_status_splash_wait_and_close_helpers(monkeypatch, qapp):
         _app_icon=None,
         _splash=None,
         _splash_started_at=10.0,
-        _MINIMUM_SPLASH_SECONDS=5.0,
+        _MINIMUM_SPLASH_SECONDS=MeadowPyApp._MINIMUM_SPLASH_SECONDS,
     )
     app._process_pending_ui_events = lambda: MeadowPyApp._process_pending_ui_events(app)
     monkeypatch.setattr(app_module.sys, "platform", "linux")
@@ -361,7 +361,12 @@ def test_app_icon_status_splash_wait_and_close_helpers(monkeypatch, qapp):
         def exec(self):
             loop_state["exec"] = True
 
-    monkeypatch.setattr(app_module, "remaining_delay_ms", lambda start, seconds: 25)
+    delay_inputs = []
+    monkeypatch.setattr(
+        app_module,
+        "remaining_delay_ms",
+        lambda start, seconds: delay_inputs.append((start, seconds)) or 25,
+    )
     monkeypatch.setattr(app_module, "QEventLoop", FakeLoop)
     monkeypatch.setattr(
         app_module.QTimer,
@@ -369,6 +374,7 @@ def test_app_icon_status_splash_wait_and_close_helpers(monkeypatch, qapp):
         lambda ms, callback: (loop_state.setdefault("ms", ms), callback()),
     )
     MeadowPyApp._wait_for_minimum_splash_time(app)
+    assert delay_inputs == [(10.0, 1.5)]
     assert loop_state == {"ms": 25, "quit": True, "exec": True}
 
     MeadowPyApp._close_splash(app)
