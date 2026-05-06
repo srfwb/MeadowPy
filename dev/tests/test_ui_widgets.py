@@ -1,0 +1,249 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+from PyQt6.QtCore import QPoint
+from PyQt6.QtWidgets import QMenu, QStatusBar
+
+from meadowpy.core.debug_manager import DebugState
+from meadowpy.core.linter import LintIssue
+from meadowpy.ui.call_stack_panel import CallStackPanel
+from meadowpy.ui.dialogs.venv_dialog import VenvDialog
+from meadowpy.ui.model_selector import ModelSelectorPopup
+from meadowpy.ui.problems_panel import ProblemsPanel
+from meadowpy.ui.splash_screen import LoadingDotsWidget, MeadowPySplashScreen
+from meadowpy.ui.status_bar import StatusBarManager
+from meadowpy.ui.variable_inspector import VariableInspectorPanel
+from meadowpy.ui.watch_panel import WatchPanel
+
+
+class Recorder:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, *args):
+        self.calls.append(args)
+
+
+class FakeSettings:
+    def __init__(self, values=None):
+        self.values = values or {}
+
+    def get(self, key, default=None):
+        return self.values.get(key, default)
+
+
+def test_debug_panels_render_stack_variables_and_watch_expressions(qapp):
+    stack = CallStackPanel()
+    selected = Recorder()
+    stack.frame_selected.connect(selected)
+    stack.update_call_stack([
+        {"function": "inner", "file": "C:/work/demo.py", "line": 12},
+        {"function": "main", "file": "C:/work/demo.py", "line": 20},
+    ])
+
+    assert stack._list.count() == 2
+    assert stack._list.item(0).text() == "inner (demo.py:12)"
+    stack._list.setCurrentRow(1)
+    assert selected.calls == [(1,)]
+    stack.clear_stack()
+    assert stack._list.count() == 0
+
+    variables = VariableInspectorPanel()
+    variables.update_variables({
+        "locals": {"name": "'Ada'", "count": "2"},
+        "globals": {"VERSION": "'1.0'"},
+    })
+    assert variables._tree.topLevelItemCount() == 2
+    assert variables._tree.topLevelItem(0).text(0) == "Locals"
+    assert variables._tree.topLevelItem(0).child(0).text(0) == "count"
+    variables.clear_variables()
+    variables.update_variables({"locals": {}, "globals": {}})
+    assert variables._tree.topLevelItem(0).text(0) == "(no variables)"
+
+    watch = WatchPanel()
+    requested = Recorder()
+    watch.evaluate_requested.connect(requested)
+    watch._input.setText("len(items)")
+    watch._add_expression()
+    watch._input.setText("len(items)")
+    watch._add_expression()
+
+    assert watch.get_expressions() == ["len(items)"]
+    assert requested.calls == [("len(items)",)]
+
+    watch.update_value("len(items)", "3", "")
+    assert watch._table.item(0, 1).text() == "3"
+    watch.update_value("len(items)", "", "NameError")
+    assert watch._table.item(0, 1).text() == "Error: NameError"
+
+    watch.request_all_evaluations()
+    assert requested.calls[-1] == ("len(items)",)
+    watch.clear_values()
+    assert watch._table.item(0, 1).text() == "(not evaluated)"
+    watch._on_cell_clicked(0, 2)
+    assert watch.get_expressions() == []
+
+    for widget in (stack, variables, watch):
+        widget.deleteLater()
+
+
+def test_problems_panel_updates_counts_navigation_and_linter_errors(qapp):
+    panel = ProblemsPanel(settings=FakeSettings({"editor.theme": "default_dark"}))
+    navigated = Recorder()
+    panel.navigate_to.connect(navigated)
+    issues = [
+        LintIssue(0, 4, "F821", "undefined name", "error"),
+        LintIssue(2, 0, "W291", "trailing whitespace", "warning"),
+    ]
+
+    panel.update_issues(issues)
+
+    assert panel.windowTitle() == "Problems — 1 error, 1 warning"
+    assert panel._table.rowCount() == 2
+    assert panel._table.item(0, 1).text() == "1"
+    panel._on_cell_clicked(1, 3)
+    assert navigated.calls == [(2, 0)]
+
+    panel.show_linter_error("flake8 is missing")
+    assert panel.windowTitle() == "Problems — Linter Error"
+    assert panel._table.item(0, 3).text() == "flake8 is missing"
+    panel.clear_issues()
+    assert panel.windowTitle() == "Problems"
+    assert panel._table.rowCount() == 0
+    panel.deleteLater()
+
+
+def test_status_bar_manager_renders_editor_debug_and_ai_state(qapp):
+    status_bar = QStatusBar()
+    settings = FakeSettings({"editor.use_spaces": True, "editor.tab_width": 2})
+    manager = StatusBarManager(status_bar, settings)
+
+    manager.update_cursor_position(4, 8)
+    manager.update_encoding("UTF-16")
+    manager.update_eol_mode("CRLF")
+    manager.update_lint_counts(2, 1)
+    manager.update_debug_state(DebugState.PAUSED)
+    manager.update_interpreter("Python 3.11.13")
+    manager.update_ollama_status(True, "qwen3")
+
+    assert manager._cursor_label.text() == "Ln 5, Col 9"
+    assert manager._encoding_label.text() == "UTF-16"
+    assert manager._eol_label.text() == "CRLF"
+    assert "2" in manager._lint_label.text()
+    assert manager._debug_label.text() == "⏸ Paused"
+    assert manager._interpreter_label.text() == "Python 3.11.13"
+    assert manager.ollama_label.text() == "AI: qwen3"
+
+    settings.values["editor.theme"] = "default_high_contrast"
+    manager.refresh_lint_colors()
+    assert "#000000" in manager._lint_label.text()
+    status_bar.deleteLater()
+
+
+def test_model_selector_menu_builders_emit_user_choices(qapp):
+    popup = ModelSelectorPopup()
+    chosen = Recorder()
+    popup.model_chosen.connect(chosen)
+
+    offline_menu = QMenu()
+    popup._build_offline_menu(offline_menu)
+    assert offline_menu.actions()[0].text() == "Ollama is not running"
+    offline_menu.actions()[-1].trigger()
+    assert chosen.calls[-1] == ("__retry__",)
+
+    no_models_menu = QMenu()
+    popup._build_no_models_menu(no_models_menu)
+    assert no_models_menu.actions()[0].text() == "No models installed"
+    no_models_menu.actions()[-1].trigger()
+    assert chosen.calls[-1] == ("__refresh__",)
+
+    popup.set_models(["llama3", "qwen3"])
+    popup.set_current_model("qwen3")
+    popup.set_connected(True)
+    models_menu = QMenu()
+    popup._build_model_list_menu(models_menu)
+    qwen_action = [
+        action for action in models_menu.actions()
+        if action.text() == "qwen3"
+    ][0]
+
+    assert qwen_action.isChecked() is True
+    qwen_action.trigger()
+    assert chosen.calls[-1] == ("qwen3",)
+
+
+def test_venv_dialog_validates_inputs_and_reports_success(monkeypatch, qapp, tmp_path):
+    messages = []
+
+    class FakeManager:
+        def __init__(self):
+            self.created = []
+
+        def detect_interpreters(self, file_path):
+            return [
+                SimpleNamespace(
+                    label="System Python 3.11",
+                    path="python.exe",
+                )
+            ]
+
+        def create_venv(self, base_dir, venv_name, interpreter):
+            self.created.append((base_dir, venv_name, interpreter))
+            return str(tmp_path / venv_name)
+
+    monkeypatch.setattr(
+        "meadowpy.ui.dialogs.venv_dialog.QMessageBox.warning",
+        lambda parent, title, body: messages.append(("warning", title, body)),
+    )
+    monkeypatch.setattr(
+        "meadowpy.ui.dialogs.venv_dialog.QMessageBox.information",
+        lambda parent, title, body: messages.append(("info", title, body)),
+    )
+    monkeypatch.setattr(
+        "meadowpy.ui.dialogs.venv_dialog.QMessageBox.critical",
+        lambda parent, title, body: messages.append(("critical", title, body)),
+    )
+
+    manager = FakeManager()
+    dialog = VenvDialog(manager, str(tmp_path / "script.py"))
+
+    dialog._dir_edit.setText("")
+    dialog._create_venv()
+    assert messages[-1][1] == "Missing Directory"
+
+    existing = tmp_path / ".venv"
+    existing.mkdir()
+    dialog._dir_edit.setText(str(tmp_path))
+    dialog._name_edit.setText(".venv")
+    dialog._create_venv()
+    assert messages[-1][1] == "Already Exists"
+
+    dialog._name_edit.setText("new-env")
+    dialog._create_venv()
+
+    assert manager.created == [(str(tmp_path), "new-env", "python.exe")]
+    assert messages[-1][0] == "info"
+    dialog.deleteLater()
+
+
+def test_splash_screen_status_icon_and_loading_dots(qapp):
+    dots = LoadingDotsWidget()
+    dots._timer.stop()
+    start = dots._active_index
+
+    dots._advance()
+
+    assert dots._active_index == (start + 1) % 3
+
+    splash = MeadowPySplashScreen(None, "1.2.3")
+    splash.set_status_text("Loading tests...")
+    pixmap = splash._icon_pixmap(None)
+    splash.center_on_screen()
+
+    assert splash._status_label.text() == "Loading tests..."
+    assert splash._version_label.text() == "v1.2.3"
+    assert pixmap.isNull() is False
+
+    dots.deleteLater()
+    splash.deleteLater()

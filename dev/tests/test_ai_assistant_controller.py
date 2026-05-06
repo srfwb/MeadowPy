@@ -32,12 +32,122 @@ class FakeEditor:
         return self.cursor
 
 
+class RichEditor:
+    display_name = "demo.py"
+
+    def __init__(self, lines=None, cursor=(0, 0)):
+        self._lines = lines or ["print('hi')\n"]
+        self.cursor = cursor
+        self.inserted = []
+        self.selections = []
+        self.removed = 0
+        self.focused = False
+
+    def text(self, line=None):
+        if line is None:
+            return "".join(self._lines)
+        if 0 <= line < len(self._lines):
+            return self._lines[line]
+        return ""
+
+    def lines(self):
+        return len(self._lines)
+
+    def getCursorPosition(self):
+        return self.cursor
+
+    def setCursorPosition(self, line, col):
+        self.cursor = (line, col)
+
+    def insert(self, code):
+        self.inserted.append(code)
+
+    def setSelection(self, *args):
+        self.selections.append(args)
+
+    def removeSelectedText(self):
+        self.removed += 1
+
+    def setFocus(self):
+        self.focused = True
+
+
 def make_controller(editor=None):
     window = SimpleNamespace(
         _ai_chat_panel=FakeChatPanel(),
         _tab_manager=SimpleNamespace(current_editor=lambda: editor),
     )
     ctx = MainWindowContext(window=window, settings=None, file_manager=None, recent_files=None)
+    return AIAssistantController(ctx), window
+
+
+class FakeSettings:
+    def __init__(self, values=None):
+        self.values = values or {}
+
+    def get(self, key, default=None):
+        return self.values.get(key, default)
+
+
+class FakeStatusBar:
+    def __init__(self):
+        self.ollama_updates = []
+        self.ollama_label = SimpleNamespace(
+            rect=lambda: SimpleNamespace(topLeft=lambda: "top-left"),
+            mapToGlobal=lambda pos: ("global", pos),
+        )
+
+    def update_ollama_status(self, connected, model):
+        self.ollama_updates.append((connected, model))
+
+
+class FakeModelSelector:
+    def __init__(self):
+        self.connected = []
+        self.models = []
+        self.current = []
+        self.shown_at = []
+
+    def set_connected(self, connected):
+        self.connected.append(connected)
+
+    def set_models(self, models):
+        self.models.append(models)
+
+    def set_current_model(self, model):
+        self.current.append(model)
+
+    def show_at(self, pos):
+        self.shown_at.append(pos)
+
+
+class FakeOllamaClient:
+    def __init__(self):
+        self.is_connected = True
+        self.connection_checks = 0
+        self.selected = []
+        self.sent_messages = []
+
+    def check_connection(self):
+        self.connection_checks += 1
+
+    def select_model(self, model):
+        self.selected.append(model)
+
+    def send_chat(self, messages):
+        self.sent_messages.append(messages)
+
+
+def make_rich_controller(editor=None):
+    window = SimpleNamespace(
+        _settings=FakeSettings({"ollama.selected_model": "llama3"}),
+        _status_bar_manager=FakeStatusBar(),
+        _model_selector=FakeModelSelector(),
+        _ollama_client=FakeOllamaClient(),
+        _ai_chat_panel=FakeChatPanel(),
+        _tab_manager=SimpleNamespace(current_editor=lambda: editor),
+    )
+    ctx = MainWindowContext(window=window, settings=window._settings, file_manager=None, recent_files=None)
     return AIAssistantController(ctx), window
 
 
@@ -70,3 +180,105 @@ def test_ai_context_finds_enclosing_function():
     assert window._ai_chat_panel.context["filename"] == "demo.py"
     assert window._ai_chat_panel.context["function_name"] == "def greet"
     assert window._ai_chat_panel.context["cursor_line"] == 1
+
+
+def test_ollama_status_model_selection_and_chat_forwarding():
+    controller, window = make_rich_controller()
+
+    controller._on_ollama_connection_changed(True, "connected")
+    controller._on_ollama_connection_changed(False, "offline")
+    controller._on_ollama_models_updated(["llama3", "qwen3"])
+    controller._on_model_chosen("__retry__")
+    controller._on_model_chosen("__refresh__")
+    controller._on_model_chosen("qwen3")
+    controller._on_ollama_status_clicked()
+    controller._on_chat_requested([{"role": "user", "content": "hi"}])
+
+    assert window._status_bar_manager.ollama_updates[:2] == [
+        (True, "llama3"),
+        (False, ""),
+    ]
+    assert window._model_selector.connected == [True, False]
+    assert window._model_selector.models == [["llama3", "qwen3"]]
+    assert window._ollama_client.connection_checks == 2
+    assert window._ollama_client.selected == ["qwen3"]
+    assert window._model_selector.current == ["qwen3", "llama3"]
+    assert window._model_selector.shown_at == [("global", "top-left")]
+    assert window._ollama_client.sent_messages == [[{"role": "user", "content": "hi"}]]
+
+
+def test_ai_improve_docstring_runtime_and_lint_prompts_include_context():
+    editor = RichEditor(
+        [
+            "def greet(name):\n",
+            "    value = name.upper()\n",
+            "\n",
+            "    return value\n",
+        ],
+        cursor=(1, 4),
+    )
+    controller, window = make_rich_controller(editor)
+
+    controller._on_ai_improve_requested("x=1")
+    controller._on_ai_docstring_requested("def greet(name):\n    pass", 1)
+    controller._on_output_ai_fix_requested("NameError: missing")
+    controller._on_lint_ai_fix_requested("F821", 2, "undefined name")
+
+    prompts = window._ai_chat_panel.prompts
+    assert "suggest improvements" in prompts[0]
+    assert "x=1" in prompts[0]
+    assert "Generate a Python docstring" in prompts[1]
+    assert editor.cursor == (1, 0)
+    assert "**My code:**" in prompts[2]
+    assert "NameError: missing" in prompts[2]
+    assert "1: def greet(name):" in prompts[3]
+    assert "2:     value = name.upper()  # <-- issue here" in prompts[3]
+    assert "4:     return value" in prompts[3]
+
+
+def test_ai_runtime_and_lint_prompts_handle_missing_editor_context():
+    controller, window = make_rich_controller(editor=None)
+
+    controller.action_ai_review_file()
+    controller._on_output_ai_fix_requested("ZeroDivisionError")
+    controller._on_lint_ai_fix_requested("W291", 5, "trailing whitespace")
+
+    assert len(window._ai_chat_panel.prompts) == 2
+    assert "I got the following Python error" in window._ai_chat_panel.prompts[0]
+    assert "ZeroDivisionError" in window._ai_chat_panel.prompts[0]
+    assert "W291" in window._ai_chat_panel.prompts[1]
+    assert "relevant code" not in window._ai_chat_panel.prompts[1]
+
+
+def test_code_insert_reindents_docstrings_and_generic_insertions():
+    editor = RichEditor(
+        ["def greet():\n", "    pass\n", "\n"],
+        cursor=(1, 0),
+    )
+    controller, _ = make_rich_controller(editor)
+
+    controller._on_code_insert_requested('```python\n"""Say hello."""\n```')
+
+    assert editor.inserted == ['    """Say hello."""\n']
+    assert editor.cursor == (2, 0)
+    assert editor.selections == [(2, 0, 3, 0)]
+    assert editor.removed == 1
+    assert editor.focused is True
+
+    generic = RichEditor(["print('a')\n"], cursor=(0, 10))
+    controller, _ = make_rich_controller(generic)
+    controller._on_code_insert_requested("print('b')")
+
+    assert generic.inserted == ["print('b')\n"]
+    assert generic.cursor == (1, 0)
+    assert generic.focused is True
+
+
+def test_docstring_insert_falls_back_to_normal_insert_without_triple_quotes():
+    editor = RichEditor(["def greet():\n", "    pass\n"], cursor=(1, 0))
+    controller, _ = make_rich_controller(editor)
+
+    controller._on_code_insert_requested("return 42")
+
+    assert editor.inserted == ["return 42\n"]
+    assert editor.cursor == (2, 0)

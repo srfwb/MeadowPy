@@ -9,7 +9,7 @@
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
   <img alt="AI" src="https://img.shields.io/badge/AI-Ollama-orange">
   <img alt="Active Development" src="https://img.shields.io/badge/Status-Active%20Development-brightgreen">
-  <img alt="Coverage" src="https://img.shields.io/badge/Coverage-88%25-brightgreen">
+  <img alt="Coverage" src="https://img.shields.io/badge/Coverage-86%25-brightgreen">
 </p>
 
 A beginner-friendly Python IDE with built-in AI assistance, a step-through debugger, and everything you need to start coding — no experience required.
@@ -258,6 +258,7 @@ If you're working on MeadowPy itself, use the developer setup path so the test t
 3. If you prefer the terminal, you can also run `.venv\Scripts\python.exe -m pytest -c dev\pytest.ini`.
 
 `dev\Run Tests.bat` forwards extra pytest arguments, so targeted runs like `dev\Run Tests.bat dev\tests\test_settings.py -q` work too.
+Coverage is measured across the full `meadowpy` package, including UI modules, controllers, app startup, and editor widgets.
 It generates coverage outputs under the `dev\` folder:
 - `dev\htmlcov\index.html` for the HTML report
 - `dev\coverage.xml` for the XML report
