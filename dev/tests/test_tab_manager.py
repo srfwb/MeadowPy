@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QMessageBox, QWidget
 
 from meadowpy.core.settings import Settings
@@ -194,16 +193,21 @@ def test_welcome_tab_reuse_theme_update_close_and_template_signal(qapp, tmp_path
     parent.deleteLater()
 
 
-def test_deferred_close_button_closes_editor_on_next_event_loop(qapp, tmp_path):
+def test_deferred_close_button_closes_editor_on_next_event_loop(monkeypatch, qapp, tmp_path):
+    scheduled_delays = []
+    monkeypatch.setattr(
+        tab_module.QTimer,
+        "singleShot",
+        lambda delay, callback: scheduled_delays.append(delay) or callback(),
+    )
     settings = make_settings(tmp_path)
     parent = ParentWindow()
     tabs = TabManager(settings, parent)
     editor = tabs.new_tab(str(tmp_path / "deferred.py"), "print('x')\n")
 
     tabs._close_editor_tab(editor)
-    QTimer.singleShot(0, qapp.quit)
-    qapp.exec()
 
+    assert scheduled_delays == [0]
     assert tabs.indexOf(editor) == -1
     tabs.deleteLater()
     parent.deleteLater()

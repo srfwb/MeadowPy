@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import meadowpy.editor.code_editor as code_editor_module
+from helpers import DummySignal
+from PyQt6.QtCore import QEvent, QPoint, Qt
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.Qsci import QsciScintilla
 
 from meadowpy.core.settings import Settings
@@ -111,4 +115,522 @@ def test_editor_configurator_applies_disabled_editor_features(qapp, tmp_path):
     assert editor.marginWidth(0) == 0
     assert editor.lexer() is not None
     assert not hasattr(editor, "_completion_apis")
+    editor.deleteLater()
+
+
+def test_display_name_settings_modification_zoom_and_margin_helpers(qapp, tmp_path):
+    editor = make_editor(qapp, tmp_path)
+    seen = []
+    editor.modification_changed.connect(seen.append)
+
+    assert editor.display_name == "Untitled"
+    editor.file_path = str(tmp_path / "demo.py")
+    assert editor.display_name == "demo.py"
+    assert editor.is_modified is False
+
+    updated_settings = Settings(tmp_path)
+    updated_settings.set("editor.auto_complete", False)
+    updated_settings.set("editor.show_line_numbers", True)
+    editor.apply_settings(updated_settings)
+    editor._on_modification_changed(True)
+
+    editor.setText("one\n" * 120)
+    editor.zoomIn(1)
+    editor.zoomOut(1)
+    editor.zoomTo(10)
+    editor._update_margin_width()
+    editor.refresh_marker_colors()
+
+    assert editor._settings is updated_settings
+    assert seen[0] is True
+    assert all(value is True for value in seen)
+    assert editor.marginWidth(0) > 0
+    editor.deleteLater()
+
+
+class CommentHarness:
+    def __init__(self, lines, *, selected=True, selection=(0, 0, 0, 0), cursor=(0, 0)):
+        self.lines = list(lines)
+        self.selected = selected
+        self.selection = selection
+        self.cursor = cursor
+        self.undo_started = 0
+        self.undo_ended = 0
+        self.replacements = []
+
+    def hasSelectedText(self):
+        return self.selected
+
+    def getSelection(self):
+        return self.selection
+
+    def getCursorPosition(self):
+        return self.cursor
+
+    def text(self, line):
+        return self.lines[line]
+
+    def beginUndoAction(self):
+        self.undo_started += 1
+
+    def endUndoAction(self):
+        self.undo_ended += 1
+
+    def setSelection(self, line_from, col_from, line_to, col_to):
+        self.selection = (line_from, col_from, line_to, col_to)
+        self.selected = True
+
+    def replaceSelectedText(self, text):
+        self.replacements.append(text)
+        line_from, _col_from, line_to, _col_to = self.selection
+        replacement = text.splitlines(keepends=True)
+        self.lines[line_from:line_to + 1] = replacement
+
+
+def test_toggle_comment_handles_trailing_selection_blank_lines_and_line_endings():
+    harness = CommentHarness(
+        ["    x = 1\r\n", "\n", "next_line()\n"],
+        selection=(0, 0, 2, 0),
+    )
+
+    CodeEditor.toggle_comment(harness)
+
+    assert harness.lines[:2] == ["    # x = 1\r\n", "\n"]
+    assert harness.lines[2] == "next_line()\n"
+    assert harness.undo_started == 1
+    assert harness.undo_ended == 1
+
+    uncomment = CommentHarness(["    #value = 1"], selected=False, cursor=(0, 0))
+    assert CodeEditor._selection_is_commented(uncomment) is True
+    CodeEditor.toggle_comment(uncomment)
+    assert uncomment.lines == ["    value = 1"]
+
+    blank = CommentHarness(["    \n"], selected=False, cursor=(0, 0))
+    assert CodeEditor._selection_is_commented(blank) is False
+    CodeEditor.toggle_comment(blank)
+    assert blank.replacements == []
+
+
+class RecordingHandler:
+    def __init__(self, return_value=False):
+        self.return_value = return_value
+        self.calls = []
+
+    def handle_return(self):
+        self.calls.append("return")
+        return self.return_value
+
+    def handle_backspace(self):
+        self.calls.append("backspace")
+        return self.return_value
+
+    def handle_key(self, event):
+        self.calls.append(("key", event.text()))
+        return self.return_value
+
+
+def test_key_press_event_routes_comment_indent_backspace_autoclose_and_fallback(qapp, tmp_path):
+    editor = make_editor(qapp, tmp_path)
+    calls = []
+    editor.toggle_comment = lambda: calls.append("comment")
+
+    editor.keyPressEvent(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            Qt.Key.Key_Slash,
+            Qt.KeyboardModifier.ControlModifier,
+            "/",
+        )
+    )
+    assert calls == ["comment"]
+
+    smart_indent = RecordingHandler(return_value=True)
+    editor._smart_indent = smart_indent
+    editor.keyPressEvent(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            Qt.Key.Key_Return,
+            Qt.KeyboardModifier.NoModifier,
+        )
+    )
+    assert smart_indent.calls == ["return"]
+
+    auto_close = RecordingHandler(return_value=True)
+    editor._auto_close = auto_close
+    editor.keyPressEvent(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            Qt.Key.Key_Backspace,
+            Qt.KeyboardModifier.NoModifier,
+        )
+    )
+    editor.keyPressEvent(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            Qt.Key.Key_ParenLeft,
+            Qt.KeyboardModifier.NoModifier,
+            "(",
+        )
+    )
+    assert auto_close.calls == ["backspace", ("key", "(")]
+
+    editor._smart_indent = RecordingHandler(return_value=False)
+    editor._auto_close = RecordingHandler(return_value=False)
+    editor.keyPressEvent(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            Qt.Key.Key_A,
+            Qt.KeyboardModifier.NoModifier,
+            "a",
+        )
+    )
+    assert editor._auto_close.calls == [("key", "a")]
+    editor.deleteLater()
+
+
+class FakePoint:
+    def __init__(self, x=0, y=0):
+        self._x = x
+        self._y = y
+
+    def x(self):
+        return self._x
+
+    def y(self):
+        return self._y
+
+
+class FakeTooltipEvent:
+    def __init__(self, pos_result=7, tooltip="E001: bad"):
+        self.pos_result = pos_result
+        self.tooltip = tooltip
+
+    def type(self):
+        return QEvent.Type.ToolTip
+
+    def pos(self):
+        return FakePoint(2, 3)
+
+    def globalPos(self):
+        return QPoint(20, 30)
+
+
+class TooltipHarness:
+    def __init__(self, pos_result=7, tooltip="E001: bad"):
+        self.pos_result = pos_result
+        self.tooltip = tooltip
+
+    def SendScintilla(self, *_args):
+        return self.pos_result
+
+    def lineIndexFromPosition(self, _pos):
+        return 3, 4
+
+    def _get_lint_tooltip(self, line, col):
+        assert (line, col) == (3, 4)
+        return self.tooltip
+
+
+def test_tooltip_event_shows_lint_message_or_hides_when_missing(monkeypatch):
+    tooltip_calls = []
+    monkeypatch.setattr(
+        code_editor_module,
+        "QToolTip",
+        SimpleNamespace(
+            showText=lambda pos, text, widget: tooltip_calls.append(("show", pos, text, widget)),
+            hideText=lambda: tooltip_calls.append(("hide",)),
+        ),
+    )
+
+    shown = TooltipHarness(tooltip="F821: undefined")
+    assert CodeEditor.event(shown, FakeTooltipEvent()) is True
+    assert tooltip_calls[0][0] == "show"
+    assert tooltip_calls[0][2] == "F821: undefined"
+
+    hidden = TooltipHarness(tooltip=None)
+    assert CodeEditor.event(hidden, FakeTooltipEvent()) is True
+    assert tooltip_calls[-1] == ("hide",)
+
+    off_editor = TooltipHarness(pos_result=-1)
+    assert CodeEditor.event(off_editor, FakeTooltipEvent()) is True
+    assert tooltip_calls[-1] == ("hide",)
+
+
+class FakeMimeData:
+    def __init__(self, has_urls):
+        self._has_urls = has_urls
+
+    def hasUrls(self):
+        return self._has_urls
+
+
+class FakeDropEvent:
+    def __init__(self):
+        self.accepted = 0
+        self.ignored = 0
+        self.mime = FakeMimeData(True)
+
+    def mimeData(self):
+        return self.mime
+
+    def acceptProposedAction(self):
+        self.accepted += 1
+
+    def ignore(self):
+        self.ignored += 1
+
+
+class DropHarness:
+    def __init__(self):
+        self.forwarded = []
+
+    def window(self):
+        return SimpleNamespace(dropEvent=lambda event: self.forwarded.append(event))
+
+
+def test_drag_and_drop_url_events_accept_and_forward_to_window():
+    harness = DropHarness()
+    event = FakeDropEvent()
+
+    CodeEditor.dragEnterEvent(harness, event)
+    CodeEditor.dragMoveEvent(harness, event)
+    CodeEditor.dropEvent(harness, event)
+
+    assert event.accepted == 2
+    assert event.ignored == 1
+    assert harness.forwarded == [event]
+
+
+class FakeAction:
+    def __init__(self, text):
+        self.text = text
+        self.tooltip = None
+        self.shortcut = None
+        self.triggered = DummySignal()
+
+    def setToolTip(self, value):
+        self.tooltip = value
+
+    def setShortcut(self, value):
+        self.shortcut = value
+
+
+class FakeMenu:
+    def __init__(self):
+        self.entries = []
+        self.exec_pos = None
+
+    def addSeparator(self):
+        self.entries.append("separator")
+
+    def addAction(self, text):
+        action = FakeAction(text)
+        self.entries.append(action)
+        return action
+
+    def exec(self, pos):
+        self.exec_pos = pos
+        for entry in list(self.entries):
+            if isinstance(entry, FakeAction):
+                entry.triggered.emit()
+
+
+class FakeContextEvent:
+    def pos(self):
+        return FakePoint(5, 6)
+
+    def globalPos(self):
+        return QPoint(50, 60)
+
+
+class ContextHarness:
+    def __init__(self, *, selected=True, commented=False, word="for", func_info=("def f():", 1), pos=10):
+        self.menu = FakeMenu()
+        self.selected = selected
+        self.commented = commented
+        self.word = word
+        self.func_info = func_info
+        self.pos = pos
+        self.ai_explain_requested = DummySignal()
+        self.ai_improve_requested = DummySignal()
+        self.ai_docstring_requested = DummySignal()
+        self.explained = []
+        self.improved = []
+        self.docstrings = []
+        self.keyword_help = []
+        self.comments = 0
+        self.ai_explain_requested.connect(lambda text: self.explained.append(text))
+        self.ai_improve_requested.connect(lambda text: self.improved.append(text))
+        self.ai_docstring_requested.connect(lambda code, line: self.docstrings.append((code, line)))
+
+    def createStandardContextMenu(self):
+        return self.menu
+
+    def SendScintilla(self, *_args):
+        return self.pos
+
+    def lineIndexFromPosition(self, _pos):
+        return 2, 4
+
+    def wordAtLineIndex(self, *_args):
+        return self.word
+
+    def _selection_is_commented(self):
+        return self.commented
+
+    def hasSelectedText(self):
+        return self.selected
+
+    def selectedText(self):
+        return "x = 1"
+
+    def _find_enclosing_def(self, line):
+        assert line in (-1, 2)
+        return self.func_info
+
+    def _show_keyword_help(self, word, pos):
+        self.keyword_help.append((word, pos))
+
+    def toggle_comment(self):
+        self.comments += 1
+
+
+def test_context_menu_builds_keyword_ai_comment_and_docstring_actions():
+    harness = ContextHarness(func_info=("def f():\n    pass", 1))
+
+    CodeEditor.contextMenuEvent(harness, FakeContextEvent())
+
+    action_texts = [entry.text for entry in harness.menu.entries if isinstance(entry, FakeAction)]
+    assert "Comment Selection" in action_texts
+    assert 'What does "for" mean?' in action_texts
+    assert "Explain this code..." in action_texts
+    assert "Review && improve..." in action_texts
+    assert "Generate docstring..." in action_texts
+    assert harness.menu.exec_pos == QPoint(50, 60)
+    assert harness.comments == 1
+    assert harness.keyword_help == [("for", QPoint(50, 60))]
+    assert harness.explained == ["x = 1"]
+    assert harness.improved == ["x = 1"]
+    assert harness.docstrings == [("def f():\n    pass", 1)]
+
+
+def test_context_menu_uses_line_comment_label_without_selection():
+    harness = ContextHarness(
+        selected=False,
+        commented=True,
+        word="",
+        func_info=None,
+        pos=-1,
+    )
+
+    CodeEditor.contextMenuEvent(harness, FakeContextEvent())
+
+    action_texts = [entry.text for entry in harness.menu.entries if isinstance(entry, FakeAction)]
+    assert action_texts == ["Uncomment Line"]
+    assert harness.comments == 1
+
+
+def test_keyword_help_popup_handles_missing_and_known_keyword(monkeypatch, qapp, tmp_path):
+    from meadowpy.ui import keyword_help_popup as popup_module
+
+    popups = []
+
+    class FakeKeywordHelpPopup:
+        def __init__(self, word, explanation, example, parent=None):
+            self.word = word
+            self.explanation = explanation
+            self.example = example
+            self.parent = parent
+            self.moved_to = None
+            self.shown = False
+            popups.append(self)
+
+        def move(self, pos):
+            self.moved_to = pos
+
+        def show(self):
+            self.shown = True
+
+    monkeypatch.setattr(popup_module, "KeywordHelpPopup", FakeKeywordHelpPopup)
+    editor = make_editor(qapp, tmp_path)
+
+    editor._show_keyword_help("definitely_missing", QPoint(1, 2))
+    editor._show_keyword_help("for", QPoint(3, 4))
+
+    assert len(popups) == 1
+    assert popups[0].word == "for"
+    assert popups[0].moved_to == QPoint(3, 4)
+    assert popups[0].shown is True
+    editor.deleteLater()
+
+
+def test_find_enclosing_def_handles_negative_missing_backslash_signature_and_body(qapp, tmp_path):
+    editor = make_editor(qapp, tmp_path)
+    editor.setText(
+        "value = 1\n"
+        "\n"
+        "def greet(name, \\\n"
+        "          title):\n"
+        "    full = f'{title} {name}'\n"
+        "\n"
+        "    return full\n"
+        "\n"
+        "print(greet('Ada', 'Dr.'))\n"
+    )
+
+    assert editor._find_enclosing_def(-1) is None
+    assert editor._find_enclosing_def(0) is None
+
+    func_code, insert_line = editor._find_enclosing_def(6)
+
+    assert insert_line == 4
+    assert "def greet(name, \\" in func_code
+    assert "          title):" in func_code
+    assert "return full" in func_code
+    assert "print(greet" not in func_code
+    editor.deleteLater()
+
+
+def test_margin_clicks_lint_tooltip_edges_and_clear_paths(qapp, tmp_path):
+    editor = make_editor(qapp, tmp_path)
+    editor.setText("abc\n\nwarn = 1\n")
+
+    editor._on_margin_clicked(1, 0, None)
+    assert editor.get_breakpoints() == set()
+    editor._on_margin_clicked(2, 0, None)
+    assert editor.get_breakpoints() == {0}
+    editor.clear_breakpoints()
+    assert editor.get_breakpoints() == set()
+
+    warning = SimpleNamespace(
+        line=0,
+        column=99,
+        code="W001",
+        message="tail warning",
+        severity="warning",
+    )
+    negative_col = SimpleNamespace(
+        line=2,
+        column=-10,
+        code="E002",
+        message="start error",
+        severity="error",
+    )
+    blank_line = SimpleNamespace(
+        line=1,
+        column=0,
+        code="E003",
+        message="blank line",
+        severity="error",
+    )
+    editor.set_lint_issues([warning, negative_col, blank_line])
+
+    assert editor._get_lint_tooltip(0, 2) == "W001: tail warning"
+    assert editor._get_lint_tooltip(0, 3) is None
+    assert editor._get_lint_tooltip(2, 0) == "E002: start error"
+
+    editor.clear_lint_markers()
+    editor.refresh_lint_colors()
+    editor.setText("")
+    editor.clear_lint_markers()
     editor.deleteLater()
