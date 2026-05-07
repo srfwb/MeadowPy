@@ -162,14 +162,27 @@ class LintRunner(QObject):
         self._worker = LintWorker(source_code, file_path, linter)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
-        self._worker.finished.connect(lambda issues, g=gen: self._on_finished(issues, g))
-        self._worker.error_occurred.connect(self.lint_error.emit)
+        self._worker.finished.connect(
+            lambda issues, g=gen: self._on_finished(issues, g)
+        )
+        self._worker.error_occurred.connect(
+            lambda message, g=gen: self._on_error(message, g)
+        )
         self._worker.finished.connect(self._thread.quit)
         self._thread.start()
 
     def _on_finished(self, issues: list, generation: int) -> None:
         if generation == self._generation:
             self.lint_finished.emit(issues)
+
+    def _on_error(self, message: str, generation: int) -> None:
+        if generation == self._generation:
+            self.lint_error.emit(message)
+
+    def cancel(self) -> None:
+        """Cancel the active lint run and ignore any late results."""
+        self._generation += 1
+        self._cancel_current()
 
     def stop(self) -> None:
         """Shut down all threads cleanly (call during app close)."""

@@ -150,6 +150,18 @@ def test_lint_runner_only_emits_for_latest_generation():
     assert finished.calls == [(["fresh"],)]
 
 
+def test_lint_runner_only_emits_errors_for_latest_generation():
+    runner = LintRunner()
+    errors = SignalRecorder()
+    runner.lint_error.connect(errors)
+    runner._generation = 2
+
+    runner._on_error("stale", 1)
+    runner._on_error("fresh", 2)
+
+    assert errors.calls == [("fresh",)]
+
+
 class FakeLintWorker:
     def __init__(self, source_code, file_path, linter):
         self.args = (source_code, file_path, linter)
@@ -215,6 +227,28 @@ def test_cancel_current_moves_running_thread_to_keep_alive_list():
     assert runner._old_threads == [thread]
     assert runner._old_workers == [worker]
     assert thread.quit_called == 1
+
+
+def test_cancel_invalidates_late_results_and_cancels_current_thread():
+    runner = LintRunner()
+    finished = SignalRecorder()
+    runner.lint_finished.connect(finished)
+    thread = FakeThread(running=True)
+    worker = object()
+    runner._generation = 3
+    runner._thread = thread
+    runner._worker = worker
+
+    runner.cancel()
+    runner._on_finished(["stale"], 3)
+
+    assert runner._generation == 4
+    assert runner._thread is None
+    assert runner._worker is None
+    assert runner._old_threads == [thread]
+    assert runner._old_workers == [worker]
+    assert thread.quit_called == 1
+    assert finished.calls == []
 
 
 def test_stop_terminates_old_threads_when_needed():

@@ -433,11 +433,38 @@ class WorkspaceController(MainWindowController):
         # Toggle outline/problems visibility based on settings
         if key == "editor.show_symbol_outline":
             self._symbol_outline.setVisible(value)
-        if key == "editor.linting_enabled":
-            if not value:
-                self._problems_panel.hide()
-                self._status_bar_manager.update_lint_counts(0, 0)
+        if key in {"editor.linter", "editor.linting_enabled"}:
+            self._refresh_lint_after_settings_change(
+                reveal_panel=key == "editor.linting_enabled" and bool(value)
+            )
         if key == "explorer.show_file_explorer":
             self._file_explorer.setVisible(value)
+
+    def _refresh_lint_after_settings_change(self, reveal_panel: bool = False) -> None:
+        """Apply lint preference changes to the current editor immediately."""
+        lint_timer = getattr(self, "_lint_timer", None)
+        timer_stop = getattr(lint_timer, "stop", None)
+        if callable(timer_stop):
+            timer_stop()
+
+        lint_runner = getattr(self, "_lint_runner", None)
+        runner_cancel = getattr(lint_runner, "cancel", None)
+        if callable(runner_cancel):
+            runner_cancel()
+
+        editor = self._tab_manager.current_editor()
+        if isinstance(editor, CodeEditor):
+            editor.clear_lint_markers()
+
+        self._problems_panel.clear_issues()
+        self._status_bar_manager.update_lint_counts(0, 0)
+
+        if not self._settings.get("editor.linting_enabled"):
+            self._problems_panel.hide()
+            return
+
+        if reveal_panel:
+            self._problems_panel.setVisible(True)
+        self._do_lint()
 
     # --- Symbol outline ---

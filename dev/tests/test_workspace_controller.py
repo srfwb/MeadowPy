@@ -515,6 +515,7 @@ class SignalEditor(WorkspaceEditor):
         self.ai_docstring_requested = FakeSignal()
         self.refreshed_lint = 0
         self.refreshed_markers = 0
+        self.cleared_lint = 0
         self.applied = 0
 
     def getCursorPosition(self):
@@ -525,6 +526,9 @@ class SignalEditor(WorkspaceEditor):
 
     def refresh_marker_colors(self):
         self.refreshed_markers += 1
+
+    def clear_lint_markers(self):
+        self.cleared_lint += 1
 
 
 def test_tab_changed_and_settings_changed_refresh_dependent_ui(monkeypatch, qapp):
@@ -615,7 +619,7 @@ def test_tab_changed_and_settings_changed_refresh_dependent_ui(monkeypatch, qapp
     assert "interpreter" in calls
     assert ("title", "MeadowPy") in calls
     assert symbol_outline.cleared == 1
-    assert problems.cleared == 1
+    assert problems.cleared == 2
     assert fake_app.stylesheets
     assert "explorer_theme" in calls
     assert "icons" in calls
@@ -628,3 +632,93 @@ def test_tab_changed_and_settings_changed_refresh_dependent_ui(monkeypatch, qapp
     assert problems.hidden == 1
     assert status.lint_counts == [(0, 0)]
     assert window._file_explorer.visible is True
+
+
+def test_linter_setting_change_clears_stale_results_and_runs_immediately(monkeypatch):
+    monkeypatch.setattr(workspace_module, "CodeEditor", SignalEditor)
+    monkeypatch.setattr(
+        workspace_module.EditorConfigurator,
+        "apply",
+        lambda editor, settings: None,
+    )
+
+    editor = SignalEditor()
+    tabs = WorkspaceTabs([editor])
+    settings = MutableSettings({"editor.linting_enabled": True})
+    problems = RecordingPanel()
+    status = SimpleNamespace(
+        lint_counts=[],
+        update_lint_counts=lambda errors, warnings: status.lint_counts.append(
+            (errors, warnings)
+        ),
+        update_indent_info=lambda: None,
+    )
+    lint_timer = SimpleNamespace(stops=0)
+    lint_timer.stop = lambda: setattr(lint_timer, "stops", lint_timer.stops + 1)
+    lint_runner = SimpleNamespace(cancels=0)
+    lint_runner.cancel = lambda: setattr(
+        lint_runner, "cancels", lint_runner.cancels + 1
+    )
+    calls = []
+    window = SimpleNamespace(
+        _settings=settings,
+        _tab_manager=tabs,
+        _problems_panel=problems,
+        _status_bar_manager=status,
+        _lint_timer=lint_timer,
+        _lint_runner=lint_runner,
+    )
+    controller = WorkspaceController(
+        MainWindowContext(window, settings, None, None)
+    )
+    controller._do_lint = lambda: calls.append("lint")
+
+    controller._on_settings_changed("editor.linter", "pylint")
+
+    assert lint_timer.stops == 1
+    assert lint_runner.cancels == 1
+    assert editor.cleared_lint == 1
+    assert problems.cleared == 1
+    assert status.lint_counts == [(0, 0)]
+    assert calls == ["lint"]
+    assert problems.visible is None
+
+
+def test_enabling_linting_reveals_panel_and_runs_current_linter(monkeypatch):
+    monkeypatch.setattr(workspace_module, "CodeEditor", SignalEditor)
+    monkeypatch.setattr(
+        workspace_module.EditorConfigurator,
+        "apply",
+        lambda editor, settings: None,
+    )
+
+    editor = SignalEditor()
+    tabs = WorkspaceTabs([editor])
+    settings = MutableSettings({"editor.linting_enabled": True})
+    problems = RecordingPanel()
+    status = SimpleNamespace(
+        lint_counts=[],
+        update_lint_counts=lambda errors, warnings: status.lint_counts.append(
+            (errors, warnings)
+        ),
+        update_indent_info=lambda: None,
+    )
+    calls = []
+    window = SimpleNamespace(
+        _settings=settings,
+        _tab_manager=tabs,
+        _problems_panel=problems,
+        _status_bar_manager=status,
+    )
+    controller = WorkspaceController(
+        MainWindowContext(window, settings, None, None)
+    )
+    controller._do_lint = lambda: calls.append("lint")
+
+    controller._on_settings_changed("editor.linting_enabled", True)
+
+    assert editor.cleared_lint == 1
+    assert problems.cleared == 1
+    assert problems.visible is True
+    assert status.lint_counts == [(0, 0)]
+    assert calls == ["lint"]
