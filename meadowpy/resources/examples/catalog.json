@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "name": "Basics",
+      "icon": "\ud83c\udf31",
+      "examples": [
+        {
+          "name": "Variables & Types",
+          "desc": "Storing data in variables and checking types",
+          "code_file": "basics/variables_and_types.py"
+        },
+        {
+          "name": "String Formatting",
+          "desc": "Different ways to build and format text",
+          "code_file": "basics/string_formatting.py"
+        },
+        {
+          "name": "Type Conversion",
+          "desc": "Converting between numbers, strings, and more",
+          "code_file": "basics/type_conversion.py"
+        },
+        {
+          "name": "Math Operations",
+          "desc": "Arithmetic, rounding, and the math module",
+          "code_file": "basics/math_operations.py"
+        },
+        {
+          "name": "User Input",
+          "desc": "Reading and validating keyboard input",
+          "code_file": "basics/user_input.py"
+        },
+        {
+          "name": "Comments & Readability",
+          "desc": "Writing clear code with comments and naming",
+          "code_file": "basics/comments_and_readability.py"
+        },
+        {
+          "name": "String Methods",
+          "desc": "Useful built-in methods for working with text",
+          "code_file": "basics/string_methods.py"
+        },
+        {
+          "name": "Enumerate & Zip",
+          "desc": "Combining and indexing iterables cleanly",
+          "code_file": "basics/enumerate_and_zip.py"
+        }
+      ]
+    },
+    {
+      "name": "Control Flow",
+      "icon": "\ud83d\udd00",
+      "examples": [
+        {
+          "name": "If / Elif / Else",
+          "desc": "Making decisions in your code",
+          "code_file": "control_flow/if_elif_else.py"
+        },
+        {
+          "name": "For Loops",
+          "desc": "Repeating code a set number of times",
+          "code_file": "control_flow/for_loops.py"
+        },
+        {
+          "name": "While Loops",
+          "desc": "Repeating code until a condition is met",
+          "code_file": "control_flow/while_loops.py"
+        },
+        {
+          "name": "Try / Except",
+          "desc": "Handling errors gracefully",
+          "code_file": "control_flow/try_except.py"
+        },
+        {
+          "name": "Logical Operators",
+          "desc": "Combining conditions with and, or, not",
+          "code_file": "control_flow/logical_operators.py"
+        },
+        {
+          "name": "Pattern Matching",
+          "desc": "Structural matching with match/case (3.10+)",
+          "code_file": "control_flow/pattern_matching.py"
+        }
+      ]
+    },
+    {
+      "name": "Data Structures",
+      "icon": "\ud83d\udce6",
+      "examples": [
+        {
+          "name": "Lists",
+          "desc": "Ordered collections you can change",
+          "code_file": "data_structures/lists.py"
+        },
+        {
+          "name": "Dictionaries",
+          "desc": "Key-value pairs for organizing data",
+          "code_file": "data_structures/dictionaries.py"
+        },
+        {
+          "name": "Tuples & Sets",
+          "desc": "Immutable sequences and unique collections",
+          "code_file": "data_structures/tuples_and_sets.py"
+        },
+        {
+          "name": "Nested Structures",
+          "desc": "Lists of dictionaries and complex data",
+          "code_file": "data_structures/nested_structures.py"
+        },
+        {
+          "name": "Stacks & Queues",
+          "desc": "Using lists as stacks and queues",
+          "code_file": "data_structures/stacks_and_queues.py"
+        }
+      ]
+    },
+    {
+      "name": "Functions",
+      "icon": "\u2699",
+      "examples": [
+        {
+          "name": "Defining Functions",
+          "desc": "Creating reusable blocks of code",
+          "code_file": "functions/defining_functions.py"
+        },
+        {
+          "name": "List Comprehensions",
+          "desc": "Building lists in a single line",
+          "code_file": "functions/list_comprehensions.py"
+        },
+        {
+          "name": "Recursion",
+          "desc": "Functions that call themselves",
+          "code_file": "functions/recursion.py"
+        },
+        {
+          "name": "Lambda & Map/Filter",
+          "desc": "Anonymous functions and data transforms",
+          "code_file": "functions/lambda_and_map_filter.py"
+        },
+        {
+          "name": "Decorators",
+          "desc": "Wrapping functions to add behavior",
+          "code_file": "functions/decorators.py"
+        },
+        {
+          "name": "Generators & Iterators",
+          "desc": "Lazy sequences with yield for efficiency",
+          "code_file": "functions/generators_and_iterators.py"
+        },
+        {
+          "name": "Type Hints",
+          "desc": "Adding type annotations for clearer code",
+          "code_file": "functions/type_hints.py"
+        }
+      ]
+    },
+    {
+      "name": "File I/O",
+      "icon": "\ud83d\udcc4",
+      "examples": [
+        {
+          "name": "Reading & Writing Files",
+          "desc": "Saving and loading text files",
+          "code_file": "file_i_o/reading_and_writing_files.py"
+        },
+        {
+          "name": "CSV Files",
+          "desc": "Working with spreadsheet-style data",
+          "code_file": "file_i_o/csv_files.py"
+        },
+        {
+          "name": "JSON Files",
+          "desc": "Saving and loading structured data",
+          "code_file": "file_i_o/json_files.py"
+        }
+      ]
+    },
+    {
+      "name": "Classes & Objects",
+      "icon": "\ud83c\udfd7",
+      "examples": [
+        {
+          "name": "Basic Classes",
+          "desc": "Creating your own types with classes",
+          "code_file": "classes_and_objects/basic_classes.py"
+        },
+        {
+          "name": "Inheritance",
+          "desc": "Building new classes from existing ones",
+          "code_file": "classes_and_objects/inheritance.py"
+        },
+        {
+          "name": "Magic Methods",
+          "desc": "Customizing how objects behave",
+          "code_file": "classes_and_objects/magic_methods.py"
+        },
+        {
+          "name": "Dataclasses",
+          "desc": "Simple classes with less boilerplate",
+          "code_file": "classes_and_objects/dataclasses.py"
+        },
+        {
+          "name": "Custom Exceptions",
+          "desc": "Defining and raising your own error types",
+          "code_file": "classes_and_objects/custom_exceptions.py"
+        }
+      ]
+    },
+    {
+      "name": "Fun Projects",
+      "icon": "\ud83c\udfae",
+      "examples": [
+        {
+          "name": "Rock Paper Scissors",
+          "desc": "A classic game against the computer",
+          "code_file": "fun_projects/rock_paper_scissors.py"
+        },
+        {
+          "name": "Password Generator",
+          "desc": "Generate secure random passwords",
+          "code_file": "fun_projects/password_generator.py"
+        },
+        {
+          "name": "Word Counter",
+          "desc": "Analyze text and count word frequency",
+          "code_file": "fun_projects/word_counter.py"
+        },
+        {
+          "name": "Hangman",
+          "desc": "Classic word guessing game",
+          "code_file": "fun_projects/hangman.py"
+        },
+        {
+          "name": "Dice Roller",
+          "desc": "Simulate dice rolls with statistics",
+          "code_file": "fun_projects/dice_roller.py"
+        }
+      ]
+    },
+    {
+      "name": "Modules & Tools",
+      "icon": "\ud83e\uddf0",
+      "examples": [
+        {
+          "name": "Modules & Imports",
+          "desc": "Organizing code across files and packages",
+          "code_file": "modules_and_tools/modules_and_imports.py"
+        },
+        {
+          "name": "Regular Expressions",
+          "desc": "Pattern matching in text with the re module",
+          "code_file": "modules_and_tools/regular_expressions.py"
+        },
+        {
+          "name": "Date & Time",
+          "desc": "Working with dates, times, and durations",
+          "code_file": "modules_and_tools/date_and_time.py"
+        },
+        {
+          "name": "Command-Line Arguments",
+          "desc": "Reading input from the command line",
+          "code_file": "modules_and_tools/command_line_arguments.py"
+        },
+        {
+          "name": "Virtual Environments",
+          "desc": "Managing project dependencies with venv and pip",
+          "code_file": "modules_and_tools/virtual_environments.py"
+        }
+      ]
+    },
+    {
+      "name": "Web & Data",
+      "icon": "\ud83c\udf10",
+      "examples": [
+        {
+          "name": "APIs & HTTP",
+          "desc": "Fetching data from web APIs",
+          "code_file": "web_and_data/apis_and_http.py"
+        },
+        {
+          "name": "Database (SQLite)",
+          "desc": "Storing and querying data with SQLite",
+          "code_file": "web_and_data/database_sqlite.py"
+        },
+        {
+          "name": "Testing",
+          "desc": "Writing tests to verify your code works",
+          "code_file": "web_and_data/testing.py"
+        }
+      ]
+    }
+  ]
+}
