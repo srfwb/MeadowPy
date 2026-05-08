@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import meadowpy.ui.controllers.workspace_controller as workspace_module
 from PyQt6.Qsci import QsciScintilla
+from meadowpy.constants import DEFAULT_WINDOW_LAYOUT_VERSION, DEFAULT_WINDOW_STATE
 from meadowpy.ui.controllers.workspace_controller import WorkspaceController
 from meadowpy.ui.controllers.window_context import MainWindowContext
 
@@ -360,6 +361,36 @@ def test_goto_zoom_and_word_wrap_actions_update_current_editor(monkeypatch):
     assert editor.zoom_calls == [("in",), ("out",), ("reset", 0)]
     assert settings.set_calls[-1] == ("editor.word_wrap", True)
     assert word_wrap_action.checked is True
+
+
+def test_reset_layout_restores_default_window_state():
+    settings = MutableSettings()
+    status = SimpleNamespace(
+        messages=[],
+        show_message=lambda message: status.messages.append(message),
+    )
+    window = SimpleNamespace(
+        _settings=settings,
+        _status_bar_manager=status,
+        restored_states=[],
+    )
+    window.restoreState = lambda state: window.restored_states.append(state) or True
+    controller = WorkspaceController(
+        MainWindowContext(window, settings, None, None)
+    )
+
+    controller.action_reset_layout()
+
+    assert len(window.restored_states) == 1
+    assert (
+        bytes(window.restored_states[0].toBase64()).decode()
+        == DEFAULT_WINDOW_STATE
+    )
+    assert settings.set_calls == [
+        ("window.state", DEFAULT_WINDOW_STATE),
+        ("window.layout_version", DEFAULT_WINDOW_LAYOUT_VERSION),
+    ]
+    assert status.messages == ["Layout reset to default"]
 
 
 def test_initial_refresh_actions_and_navigation_open_existing_files(monkeypatch, tmp_path):

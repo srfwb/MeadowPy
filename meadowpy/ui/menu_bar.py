@@ -209,6 +209,12 @@ class MenuBarBuilder:
         search.setShortcut(QKeySequence("Ctrl+Shift+J"))
         view_menu.addAction(search)
 
+        view_menu.addSeparator()
+
+        reset_layout = view_menu.addAction("Reset &Layout")
+        reset_layout.setToolTip("Restore the default panel layout")
+        reset_layout.triggered.connect(self._window.action_reset_layout)
+
     def _build_run_menu(self, menu_bar: QMenuBar) -> None:
         run_menu = menu_bar.addMenu("&Run")
 

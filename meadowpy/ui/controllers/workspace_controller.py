@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PyQt6.QtCore import QByteArray
 from PyQt6.QtWidgets import QApplication, QFileDialog, QInputDialog, QMessageBox
 from PyQt6.Qsci import QsciScintilla
 
-from meadowpy.constants import APP_NAME
+from meadowpy.constants import (
+    APP_NAME,
+    DEFAULT_WINDOW_LAYOUT_VERSION,
+    DEFAULT_WINDOW_STATE,
+)
 from meadowpy.editor.code_editor import CodeEditor
 from meadowpy.editor.editor_config import EditorConfigurator
 from meadowpy.resources.resource_loader import (
@@ -218,6 +223,20 @@ class WorkspaceController(MainWindowController):
         """Show the output panel and raise it (used by Run actions)."""
         self._output_panel.setVisible(True)
         self._output_panel.raise_()
+
+    def action_reset_layout(self) -> None:
+        """Restore the default dock/widget layout without closing open files."""
+        state = QByteArray.fromBase64(DEFAULT_WINDOW_STATE.encode())
+        restored = self.window.restoreState(state)
+        if restored:
+            self._settings.set("window.state", DEFAULT_WINDOW_STATE)
+            self._settings.set(
+                "window.layout_version",
+                DEFAULT_WINDOW_LAYOUT_VERSION,
+            )
+            self._status_bar_manager.show_message("Layout reset to default")
+        else:
+            self._status_bar_manager.show_message("Could not reset layout")
 
     # --- Run actions (Phase 3) ---
 
