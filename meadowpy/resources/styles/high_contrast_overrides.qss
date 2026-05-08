@@ -1,0 +1,240 @@
+/* === High Contrast accessibility overrides - pure black & white === */
+QWidget { color: #FFFFFF; }
+
+QPushButton {
+    background: #000000;
+    color: #FFFFFF;
+    border: 2px solid #FFFFFF;
+    border-radius: 4px;
+}
+QPushButton:hover { background: #FFFFFF; color: #000000; }
+QPushButton:focus { border: 3px solid #FFFFFF; }
+QPushButton:pressed { background: #FFFFFF; color: #000000; }
+QPushButton:disabled { color: #7F7F7F; border-color: #7F7F7F; }
+
+QDialogButtonBox QPushButton:default,
+QDialogButtonBox QPushButton:default:hover {
+    background: #FFFFFF;
+    color: #000000;
+    border: 2px solid #FFFFFF;
+}
+
+QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox, QFontComboBox {
+    background: #000000;
+    color: #FFFFFF;
+    border: 2px solid #FFFFFF;
+    border-radius: 3px;
+    selection-background-color: #FFFFFF;
+    selection-color: #000000;
+}
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus,
+QSpinBox:focus, QComboBox:focus, QFontComboBox:focus {
+    border: 3px solid #FFFFFF;
+}
+
+QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button {
+    background: #000000;
+    border-left: 2px solid #FFFFFF;
+}
+QComboBox QAbstractItemView {
+    background: #000000;
+    color: #FFFFFF;
+    border: 2px solid #FFFFFF;
+    selection-background-color: #FFFFFF;
+    selection-color: #000000;
+}
+/* The base QSS has a more specific ::item:selected rule that bakes in
+   color: #FFFFFF and background: {{ACCENT}}. In HC mode ACCENT is white,
+   so without this override the highlighted item ends up white-on-white. */
+QComboBox QAbstractItemView::item {
+    background: #000000;
+    color: #FFFFFF;
+    border-left: 3px solid transparent;
+}
+QComboBox QAbstractItemView::item:hover,
+QComboBox QAbstractItemView::item:selected,
+QComboBox QAbstractItemView::item:selected:focus {
+    background: #FFFFFF;
+    color: #000000;
+    border-left: 3px solid #FFFFFF;
+}
+
+QCheckBox, QRadioButton, QLabel { color: #FFFFFF; background: transparent; }
+QCheckBox::indicator, QRadioButton::indicator {
+    width: 14px; height: 14px;
+    background: #000000;
+    border: 2px solid #FFFFFF;
+}
+QCheckBox::indicator:checked, QRadioButton::indicator:checked {
+    background: #FFFFFF;
+    border-color: #FFFFFF;
+}
+
+QMenu, QMenuBar { background: #000000; color: #FFFFFF; }
+QMenuBar::item:selected, QMenu::item:selected {
+    background: #FFFFFF; color: #000000;
+}
+
+QGroupBox { border: 2px solid #FFFFFF; border-radius: 4px; margin-top: 8px; color: #FFFFFF; }
+QGroupBox::title { color: #FFFFFF; }
+
+QToolBar { background: #000000; border: none; }
+QToolBar QToolButton { color: #FFFFFF; background: #000000; border: 2px solid transparent; }
+QToolBar QToolButton:hover { background: #FFFFFF; border-color: #FFFFFF; }
+QToolBar QToolButton:pressed { background: #FFFFFF; }
+
+QStatusBar { background: #000000; color: #FFFFFF; }
+
+QScrollBar:vertical, QScrollBar:horizontal {
+    background: #000000; border: 1px solid #FFFFFF;
+}
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: #FFFFFF; border: 1px solid #FFFFFF;
+}
+QScrollBar::add-line, QScrollBar::sub-line { background: #000000; }
+
+QHeaderView::section { background: #000000; color: #FFFFFF; border: 1px solid #FFFFFF; }
+QTreeView, QListView, QTableView, QTableWidget {
+    background: #000000; color: #FFFFFF; alternate-background-color: #000000;
+    selection-background-color: #FFFFFF; selection-color: #000000;
+}
+QTreeView::item:hover, QListView::item:hover, QTableView::item:hover {
+    background: #2A2A2A;
+}
+
+QSplitter::handle { background: #FFFFFF; }
+
+QDockWidget { color: #FFFFFF; }
+QDockWidget::title { background: #000000; color: #FFFFFF; border: 1px solid #FFFFFF; }
+
+/* Frames / panel containers - solid white border for clear separation.
+   Mirrors the original border structure so every panel renders as one
+   continuous outline rather than three stacked boxes. */
+#editorContainer,
+#explorerContainer,
+#outlineContainer,
+#problemsContainer,
+#searchContainer,
+#outputContainer,
+#aiChatContainer {
+    border: 2px solid #FFFFFF;
+}
+
+#explorerTitleBar,
+#outlineTitleBar,
+#problemsTitleBar,
+#searchTitleBar,
+#outputTitleBar,
+#aiChatTitleBar {
+    border: 2px solid #FFFFFF;
+    border-bottom: none;
+}
+
+#aiChatInputContainer {
+    border: none;
+    border-top: 2px solid #FFFFFF;
+}
+
+/* Tab bars - selected tab inverts with white background and black text. */
+QTabBar::tab { color: #FFFFFF; background: #000000; border: 2px solid transparent; border-bottom: none; }
+QTabBar::tab:selected {
+    background: #FFFFFF; color: #000000;
+    border: 2px solid #FFFFFF; border-bottom: none;
+    border-top: 3px solid #FFFFFF;
+}
+QTabBar::tab:hover:!selected { background: #2A2A2A; color: #FFFFFF; }
+
+/* Project pill badge - must override its inline stylesheet */
+#explorerProjectBadge {
+    background: #000000;
+    color: #FFFFFF;
+    border: 2px solid #FFFFFF;
+}
+#explorerProjectBadge:hover { background: #FFFFFF; color: #000000; }
+
+/* AI chat extras */
+#aiChatHint { color: #FFFFFF; }
+#aiChatPlaceholder { color: #FFFFFF; }
+#aiChatErrorLabel { color: #FFFFFF; }
+#aiChatStoppedLabel { color: #FFFFFF; }
+
+/* User chat bubble - force black text on the white HC surface. */
+#chatBubbleUser { background: #FFFFFF; color: #000000; border: 2px solid #FFFFFF; }
+#chatBubbleUser QLabel { color: #000000; background: transparent; }
+
+/* AI chat Stop button - original is red, so HC overrides it explicitly. */
+#aiChatStopBtn {
+    background: #000000;
+    color: #FFFFFF;
+    border: 2px solid #FFFFFF;
+    border-radius: 6px;
+}
+#aiChatStopBtn:hover { background: #FFFFFF; color: #000000; }
+#aiChatStopBtn:disabled {
+    background: #2A2A2A;
+    color: #7F7F7F;
+    border-color: #7F7F7F;
+}
+
+/* Accent-styled buttons across the app. */
+#aiChatSendBtn,
+#SearchPanel #searchRunBtn,
+#OutputPanel #replRunBtn,
+#exLibOpenBtn,
+#findToggleBtn:checked,
+#welcomeActionBtn,
+#welcomeTemplateCard,
+#chatBubbleUser,
+QPushButton:default,
+QPushButton:default:hover {
+    background: #FFFFFF;
+    color: #000000;
+    border: 2px solid #FFFFFF;
+}
+
+/* Welcome screen template cards. */
+#welcomeTemplateCard #welcomeCardTitle,
+#welcomeTemplateCard #welcomeCardDesc,
+#welcomeCardTitle,
+#welcomeCardDesc {
+    color: #000000;
+    background: transparent;
+}
+
+/* Example library selected category/card states. */
+#exLibCatBtn[selected="true"] {
+    border: 3px solid #FFFFFF;
+    border-radius: 6px;
+    background: transparent;
+}
+#exLibExCard[selected="true"] {
+    border: 3px solid #FFFFFF;
+    border-radius: 8px;
+    background: transparent;
+}
+#aiChatSendBtn:hover,
+#SearchPanel #searchRunBtn:hover,
+#OutputPanel #replRunBtn:hover,
+#exLibOpenBtn:hover,
+#welcomeActionBtn:hover {
+    background: #CCCCCC;
+    color: #000000;
+}
+#aiChatSendBtn:disabled,
+#SearchPanel #searchRunBtn:disabled,
+#OutputPanel #replRunBtn:disabled,
+#aiChatStopBtn:disabled {
+    background: #2A2A2A;
+    color: #7F7F7F;
+    border-color: #7F7F7F;
+}
+
+/* Status bar should stay black-on-white at the bottom of the window. */
+QStatusBar { background: #FFFFFF; color: #000000; }
+QStatusBar QLabel,
+QStatusBar #ollamaStatusLabel,
+#ollamaStatusLabel {
+    background: transparent;
+    color: #000000;
+    border: none;
+}
