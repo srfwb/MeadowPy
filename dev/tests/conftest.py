@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from PyQt6.QtCore import QEvent
 from PyQt6.QtWidgets import QApplication
 
 
@@ -26,4 +27,9 @@ def tmp_path():
     try:
         yield path
     finally:
+        # Let Qt-owned models release file watchers before deleting temp dirs.
+        app = QApplication.instance()
+        if app is not None:
+            app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            app.processEvents()
         shutil.rmtree(path, ignore_errors=True)
