@@ -1,9 +1,7 @@
 """Output panel — displays program output with stdin support."""
 
-import re
-
-from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QRadialGradient, QTextCharFormat, QTextCursor
+from PyQt6.QtCore import QEvent, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
     QDockWidget,
@@ -13,112 +11,22 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
-    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from meadowpy.resources.resource_loader import (
-    get_icon_path,
     load_themed_icon,
     theme_is_high_contrast,
 )
-
-# Matches Python traceback file references, e.g.:
-#   File "C:\Users\Alex\script.py", line 42, in <module>
-_TRACEBACK_RE = re.compile(r'^\s*File "([^"]+)", line (\d+)')
-
-
-class _HeaderGlowPainter(QObject):
-    """Paints radial glow effects on the output header behind registered buttons."""
-
-    HOVER_RADIUS = 12
-    HOVER_ALPHA = 55
-    PRESS_RADIUS = 16
-    PRESS_ALPHA = 90
-
-    def __init__(self, surface: QWidget, parent=None):
-        super().__init__(parent)
-        self._surface = surface
-        self._entries: list[dict] = []
-        surface.installEventFilter(self)
-
-    def add_button(self, button, color: QColor) -> None:
-        entry = {"btn": button, "color": QColor(color), "state": "idle"}
-        self._entries.append(entry)
-        button.installEventFilter(self)
-
-    def set_button_color(self, button, color: QColor) -> None:
-        """Update the glow color for an already-registered button."""
-        for entry in self._entries:
-            if entry["btn"] is button:
-                entry["color"] = QColor(color)
-                self._surface.update()
-                return
-
-    def eventFilter(self, obj, event):
-        etype = event.type()
-
-        for entry in self._entries:
-            if obj is entry["btn"]:
-                if etype == QEvent.Type.HoverEnter and obj.isEnabled():
-                    entry["state"] = "hover"
-                    self._surface.update()
-                elif etype == QEvent.Type.HoverLeave:
-                    entry["state"] = "idle"
-                    self._surface.update()
-                elif etype == QEvent.Type.MouseButtonPress and obj.isEnabled():
-                    entry["state"] = "press"
-                    self._surface.update()
-                elif etype == QEvent.Type.MouseButtonRelease:
-                    entry["state"] = (
-                        "hover" if obj.underMouse() and obj.isEnabled()
-                        else "idle"
-                    )
-                    self._surface.update()
-                return False
-
-        if obj is self._surface and etype == QEvent.Type.Paint:
-            obj.removeEventFilter(self)
-            QApplication.sendEvent(obj, event)
-            obj.installEventFilter(self)
-
-            painter = QPainter(obj)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            for entry in self._entries:
-                if entry["state"] == "idle":
-                    continue
-                btn = entry["btn"]
-                if not btn.isEnabled():
-                    entry["state"] = "idle"
-                    continue
-                center = QPointF(btn.geometry().center())
-                if entry["state"] == "press":
-                    radius = self.PRESS_RADIUS
-                    alpha = self.PRESS_ALPHA
-                else:
-                    radius = self.HOVER_RADIUS
-                    alpha = self.HOVER_ALPHA
-
-                base = QColor(entry["color"])
-                grad = QRadialGradient(center, radius)
-                c0 = QColor(base); c0.setAlpha(alpha)
-                c1 = QColor(base); c1.setAlpha(int(alpha * 0.55))
-                c2 = QColor(base); c2.setAlpha(int(alpha * 0.2))
-                c3 = QColor(base); c3.setAlpha(0)
-                grad.setColorAt(0.0, c0)
-                grad.setColorAt(0.35, c1)
-                grad.setColorAt(0.65, c2)
-                grad.setColorAt(1.0, c3)
-
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QBrush(grad))
-                painter.drawEllipse(center, radius, radius)
-            painter.end()
-            return True
-
-        return False
+from meadowpy.ui.output_panel_glow import HeaderGlowPainter
+from meadowpy.ui.output_text_formatting import (
+    TRACEBACK_RE,
+    insert_stderr_text,
+    normalize_output_text,
+    stream_text_format,
+)
 
 
 class OutputPanel(QDockWidget):
@@ -239,7 +147,7 @@ class OutputPanel(QDockWidget):
         run_glow = QColor("#FFFFFF") if is_hc else QColor("#4CAF50")
         stop_glow = QColor("#FFFFFF") if is_hc else QColor("#E51400")
         restart_glow = QColor("#FFFFFF") if is_hc else QColor("#FF9800")
-        self._header_glow = _HeaderGlowPainter(title_bar, title_bar)
+        self._header_glow = HeaderGlowPainter(title_bar, title_bar)
         self._header_glow.add_button(self._run_btn, run_glow)
         self._header_glow.add_button(self._stop_btn, stop_glow)
         self._header_glow.add_button(self._restart_repl_btn, restart_glow)
@@ -348,7 +256,7 @@ class OutputPanel(QDockWidget):
         """
         # Normalize Windows \r\n → \n (QPlainTextEdit treats \r as
         # an extra line break, which causes spurious blank lines).
-        text = text.replace("\r", "")
+        text = normalize_output_text(text)
 
         # Record into the replay buffer so we can re-render with new colors
         # on a theme switch. Capped to avoid unbounded growth on long-running
@@ -371,17 +279,10 @@ class OutputPanel(QDockWidget):
             self._fix_separator.setVisible(True)
             self._insert_stderr(cursor, text)
         else:
-            fmt = QTextCharFormat()
-            is_hc = theme_is_high_contrast(self._current_theme_name())
-            if stream == "hint":
-                fmt.setForeground(QColor("#FFFFFF") if is_hc else QColor("#4EC9B0"))
-                fmt.setFontItalic(True)
-            elif stream == "system":
-                # In HC, system messages stay legible white instead of dim grey
-                fmt.setForeground(QColor("#FFFFFF") if is_hc else QColor("#888888"))
-                fmt.setFontItalic(True)
-            # stdout uses default text color (theme-dependent)
-            cursor.insertText(text, fmt)
+            cursor.insertText(
+                text,
+                stream_text_format(stream, self._current_theme_name()),
+            )
 
         # Enforce max line limit
         self._trim_output()
@@ -487,7 +388,11 @@ class OutputPanel(QDockWidget):
 
     def eventFilter(self, obj, event):
         # Up/Down arrow keys in the input line → command history (REPL mode)
-        if hasattr(self, "_input_line") and obj is self._input_line and self._mode == self._MODE_REPL:
+        if (
+            hasattr(self, "_input_line")
+            and obj is self._input_line
+            and self._mode == self._MODE_REPL
+        ):
             if event.type() == QEvent.Type.KeyPress:
                 key = event.key()
                 if key == Qt.Key.Key_Up:
@@ -505,7 +410,7 @@ class OutputPanel(QDockWidget):
                 pos = event.position().toPoint()
                 cursor = self._output_text.cursorForPosition(pos)
                 line_text = cursor.block().text()
-                match = _TRACEBACK_RE.match(line_text)
+                match = TRACEBACK_RE.match(line_text)
                 if match:
                     file_path = match.group(1)
                     line_num = int(match.group(2))
@@ -517,7 +422,7 @@ class OutputPanel(QDockWidget):
                 cursor = self._output_text.cursorForPosition(pos)
                 line_text = cursor.block().text()
                 viewport = self._output_text.viewport()
-                if _TRACEBACK_RE.match(line_text):
+                if TRACEBACK_RE.match(line_text):
                     viewport.setCursor(
                         Qt.CursorShape.PointingHandCursor
                     )
@@ -532,25 +437,7 @@ class OutputPanel(QDockWidget):
 
     def _insert_stderr(self, cursor: QTextCursor, text: str) -> None:
         """Insert stderr text, styling traceback file lines as links."""
-        is_hc = theme_is_high_contrast(self._current_theme_name())
-
-        stderr_fmt = QTextCharFormat()
-        stderr_fmt.setForeground(QColor("#FFFFFF") if is_hc else QColor("#E51400"))
-
-        link_fmt = QTextCharFormat()
-        link_fmt.setForeground(QColor("#FFFFFF") if is_hc else QColor("#5999D4"))
-        link_fmt.setFontUnderline(True)
-
-        # Split into lines but preserve the original text exactly
-        lines = text.split("\n")
-        for i, line in enumerate(lines):
-            if _TRACEBACK_RE.match(line):
-                cursor.insertText(line, link_fmt)
-            else:
-                cursor.insertText(line, stderr_fmt)
-            # Re-add newlines between lines (split removes them)
-            if i < len(lines) - 1:
-                cursor.insertText("\n", stderr_fmt)
+        insert_stderr_text(cursor, text, self._current_theme_name())
 
     def _on_fix_with_ai(self) -> None:
         """Emit the last error text for AI analysis."""
