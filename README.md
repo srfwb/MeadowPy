@@ -220,6 +220,7 @@ MeadowPy is actively developed. Here's what's coming next:
 | Global search and replace                          | 🔄 In progress |
 | Keyboard shortcut editor                           | 🔄 In progress |
 | UI overhaul                       | 🔄 In progress     |
+| Improve linter customization                      | 🔄 In progress     |
 | Improved syntax highlighting                       | 📋 Planned     |
 | Plot / output preview                              | 📋 Planned     |
 | Git basics panel                                   | 📋 Planned     |
