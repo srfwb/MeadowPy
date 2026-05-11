@@ -255,8 +255,13 @@ class TabManager(QTabWidget):
             if reply == QMessageBox.StandardButton.Cancel:
                 return False
             if reply == QMessageBox.StandardButton.Save:
-                if editor.file_path and self._file_manager:
-                    self._file_manager.save_file(editor.file_path, editor.text())
+                if self._file_manager:
+                    if editor.file_path:
+                        self._file_manager.save_file(editor.file_path, editor.text())
+                    else:
+                        path = self._file_manager.save_file_as(editor.text(), parent=self)
+                        if not path:
+                            return False
         self.removeTab(index)
         return True
 
@@ -283,8 +288,13 @@ class TabManager(QTabWidget):
                 if reply == QMessageBox.StandardButton.Cancel:
                     return False
                 if reply == QMessageBox.StandardButton.Save:
-                    if editor.file_path and self._file_manager:
-                        self._file_manager.save_file(editor.file_path, editor.text())
+                    if self._file_manager:
+                        if editor.file_path:
+                            self._file_manager.save_file(editor.file_path, editor.text())
+                        else:
+                            path = self._file_manager.save_file_as(editor.text(), parent=self)
+                            if not path:
+                                return False
         return True
 
     def current_editor(self) -> CodeEditor | None:
