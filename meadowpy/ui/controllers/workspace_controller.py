@@ -148,9 +148,9 @@ class WorkspaceController(MainWindowController):
         if not editor:
             return
         if editor.file_path:
-            self._file_manager.save_file(editor.file_path, editor.text())
-            editor.setModified(False)
-            self._tab_manager.update_tab_title(self._tab_manager.currentIndex())
+            if self._file_manager.save_file(editor.file_path, editor.text()):
+                editor.setModified(False)
+                self._tab_manager.update_tab_title(self._tab_manager.currentIndex())
         else:
             self.action_save_as()
 

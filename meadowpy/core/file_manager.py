@@ -1,7 +1,7 @@
 """File I/O operations: open, save, save-as."""
 
 from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtWidgets import QFileDialog
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from meadowpy.core.settings import Settings
 from meadowpy.core.recent_files import RecentFilesManager
@@ -41,7 +41,8 @@ class FileManager(QObject):
             self._recent_files.add(file_path)
             self.file_saved.emit(file_path)
             return True
-        except OSError:
+        except OSError as e:
+            QMessageBox.critical(None, "Error", f"Could not save file:\n{e}")
             return False
 
     def save_file_as(self, content: str, parent=None) -> str | None:
