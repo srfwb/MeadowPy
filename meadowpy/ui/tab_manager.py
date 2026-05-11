@@ -143,9 +143,10 @@ class TabManager(QTabWidget):
 
     tab_changed = pyqtSignal(object)  # emits CodeEditor or None
 
-    def __init__(self, settings: Settings, parent=None):
+    def __init__(self, settings: Settings, file_manager=None, parent=None):
         super().__init__(parent)
         self._settings = settings
+        self._file_manager = file_manager
         self._untitled_counter = 1
 
         self.setObjectName("editorTabs")
@@ -254,9 +255,8 @@ class TabManager(QTabWidget):
             if reply == QMessageBox.StandardButton.Cancel:
                 return False
             if reply == QMessageBox.StandardButton.Save:
-                main_window = self.window()
-                if hasattr(main_window, "action_save"):
-                    main_window.action_save()
+                if editor.file_path and self._file_manager:
+                    self._file_manager.save_file(editor.file_path, editor.text())
         self.removeTab(index)
         return True
 
@@ -283,9 +283,8 @@ class TabManager(QTabWidget):
                 if reply == QMessageBox.StandardButton.Cancel:
                     return False
                 if reply == QMessageBox.StandardButton.Save:
-                    main_window = self.window()
-                    if hasattr(main_window, "action_save"):
-                        main_window.action_save()
+                    if editor.file_path and self._file_manager:
+                        self._file_manager.save_file(editor.file_path, editor.text())
         return True
 
     def current_editor(self) -> CodeEditor | None:
