@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+import meadowpy.ui.controllers.ai_assistant_controller as ai_controller_module
 from meadowpy.ui.controllers.ai_assistant_controller import AIAssistantController
 from meadowpy.ui.controllers.window_context import MainWindowContext
 
@@ -205,6 +206,32 @@ def test_ollama_status_model_selection_and_chat_forwarding():
     assert window._model_selector.current == ["qwen3", "llama3"]
     assert window._model_selector.shown_at == [("global", "top-left")]
     assert window._ollama_client.sent_messages == [[{"role": "user", "content": "hi"}]]
+
+
+def test_ollama_setup_dialog_opens_and_rechecks(monkeypatch):
+    controller, window = make_rich_controller()
+    dialogs = []
+
+    class FakeSetupDialog:
+        def __init__(self, settings, parent=None):
+            self.settings = settings
+            self.parent = parent
+            dialogs.append(self)
+
+        def exec(self):
+            return 0
+
+    monkeypatch.setattr(
+        ai_controller_module,
+        "OllamaSetupDialog",
+        FakeSetupDialog,
+    )
+
+    controller._on_model_chosen("__setup__")
+
+    assert dialogs[0].settings is window._settings
+    assert dialogs[0].parent is window
+    assert window._ollama_client.connection_checks == 1
 
 
 def test_ai_improve_docstring_runtime_and_lint_prompts_include_context():

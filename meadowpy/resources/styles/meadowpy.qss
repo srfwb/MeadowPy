@@ -1685,6 +1685,21 @@ QRadioButton::indicator:checked {
     font-size: 11px;
 }
 
+#aiChatSetupBtn {
+    background: #F0F3F1;
+    border: 1px solid #CED4DA;
+    border-radius: 4px;
+    color: {{ACCENT}};
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 7px;
+}
+
+#aiChatSetupBtn:hover {
+    background: #E4EAE6;
+    border-color: {{ACCENT}};
+}
+
 #aiChatClearBtn {
     background: transparent;
     border: none;

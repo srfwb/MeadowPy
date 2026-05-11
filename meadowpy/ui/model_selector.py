@@ -8,8 +8,7 @@ class ModelSelectorPopup(QObject):
     """A popup menu that lists available Ollama models for selection.
 
     Emits ``model_chosen`` with the model name when the user picks one,
-    or the special sentinel ``"__retry__"`` / ``"__refresh__"`` to request
-    a reconnection / model-list refresh.
+    or a special sentinel to request setup, retry, or refresh.
     """
 
     model_chosen = pyqtSignal(str)
@@ -57,6 +56,9 @@ class ModelSelectorPopup(QObject):
 
         menu.addSeparator()
 
+        setup = menu.addAction("Setup/check Ollama...")
+        setup.triggered.connect(lambda: self.model_chosen.emit("__setup__"))
+
         retry = menu.addAction("Check connection...")
         retry.triggered.connect(lambda: self.model_chosen.emit("__retry__"))
 
@@ -65,10 +67,10 @@ class ModelSelectorPopup(QObject):
         no_models = menu.addAction("No models installed")
         no_models.setEnabled(False)
 
-        hint = menu.addAction("Run:  ollama pull llama3")
-        hint.setEnabled(False)
-
         menu.addSeparator()
+
+        setup = menu.addAction("Setup/check Ollama...")
+        setup.triggered.connect(lambda: self.model_chosen.emit("__setup__"))
 
         refresh = menu.addAction("Refresh models...")
         refresh.triggered.connect(
@@ -90,6 +92,9 @@ class ModelSelectorPopup(QObject):
             )
 
         menu.addSeparator()
+
+        setup = menu.addAction("Setup/check Ollama...")
+        setup.triggered.connect(lambda: self.model_chosen.emit("__setup__"))
 
         refresh = menu.addAction("Refresh models...")
         refresh.triggered.connect(

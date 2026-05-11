@@ -54,6 +54,7 @@ class AIChatPanel(QDockWidget):
     chat_requested = pyqtSignal(list)  # full message history (list[dict])
     chat_stop_requested = pyqtSignal()  # request to cancel current stream
     code_insert_requested = pyqtSignal(str)  # code text to insert into editor
+    setup_requested = pyqtSignal()  # request to open Ollama setup
 
     def __init__(self, parent=None):
         super().__init__("AI Chat", parent)
@@ -116,6 +117,14 @@ class AIChatPanel(QDockWidget):
         self._model_label.setObjectName("aiChatModelLabel")
         self._model_label.setToolTip("Currently selected Ollama AI model")
         header_layout.addWidget(self._model_label)
+
+        self._setup_btn = QPushButton("Setup")
+        self._setup_btn.setObjectName("aiChatSetupBtn")
+        self._setup_btn.setToolTip("Set up or check Ollama")
+        self._setup_btn.setFixedHeight(22)
+        self._setup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._setup_btn.clicked.connect(self.setup_requested.emit)
+        header_layout.addWidget(self._setup_btn)
 
         self._clear_btn = QToolButton()
         self._clear_btn.setObjectName("aiChatClearBtn")
@@ -284,6 +293,7 @@ class AIChatPanel(QDockWidget):
         self._set_status_dot(connected)
         if not connected:
             self._model_label.setText("ollama")
+        self._setup_btn.setVisible(not connected)
 
     def apply_accent(self, accent_hex: str, is_dark: bool = True) -> None:
         """Update accent-tinted visuals (sparkle, status dot, bubbles) to theme."""

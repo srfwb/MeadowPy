@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from meadowpy.core.ollama_client import OllamaClient
+from meadowpy.ui.dialogs.ollama_setup_dialog import OllamaSetupDialog
 from meadowpy.ui.model_selector import ModelSelectorPopup
 from meadowpy.ui.controllers.window_context import MainWindowController
 
@@ -38,12 +39,28 @@ class AIAssistantController(MainWindowController):
 
     def _on_model_chosen(self, model_name: str) -> None:
         """Handle model selection from the popup menu."""
-        if model_name in ("__retry__", "__refresh__"):
+        if model_name == "__setup__":
+            self.action_ollama_setup()
+        elif model_name in ("__retry__", "__refresh__"):
             self._ollama_client.check_connection()
         else:
             self._ollama_client.select_model(model_name)
             self._status_bar_manager.update_ollama_status(True, model_name)
             self._model_selector.set_current_model(model_name)
+
+    def action_ollama_setup(self) -> None:
+        """Open the guided Ollama setup/check dialog."""
+        dialog = OllamaSetupDialog(self._settings, self.window)
+        dialog.exec()
+        model = self._settings.get("ollama.selected_model") or ""
+        self._model_selector.set_current_model(model)
+        if hasattr(self._ai_chat_panel, "set_model_name"):
+            self._ai_chat_panel.set_model_name(model)
+        self._status_bar_manager.update_ollama_status(
+            self._ollama_client.is_connected,
+            model,
+        )
+        self._ollama_client.check_connection()
 
     def _on_ollama_status_clicked(self) -> None:
         """Show the model selector popup when the status bar label is clicked."""

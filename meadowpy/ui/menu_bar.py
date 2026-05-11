@@ -300,6 +300,12 @@ class MenuBarBuilder:
         ai_chat.setShortcut(QKeySequence("Ctrl+Shift+A"))
         ai_menu.addAction(ai_chat)
 
+        ai_menu.addSeparator()
+
+        setup = ai_menu.addAction("Setup/check &Ollama...")
+        setup.setToolTip("Check Ollama, install a model, and choose it for AI")
+        setup.triggered.connect(self._window.action_ollama_setup)
+
     def _build_help_menu(self, menu_bar: QMenuBar) -> None:
         help_menu = menu_bar.addMenu("&Help")
 

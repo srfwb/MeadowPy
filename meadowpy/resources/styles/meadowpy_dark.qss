@@ -1812,6 +1812,21 @@ QDockWidget::title {
     font-size: 11px;
 }
 
+#aiChatSetupBtn {
+    background: #263229;
+    border: 1px solid #3C3C3C;
+    border-radius: 4px;
+    color: {{ACCENT}};
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 7px;
+}
+
+#aiChatSetupBtn:hover {
+    background: #2F3D32;
+    border-color: {{ACCENT}};
+}
+
 #aiChatClearBtn {
     background: transparent;
     border: none;

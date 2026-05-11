@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QAction, QKeyEvent
+from PyQt6.QtGui import QAction, QKeyEvent, QPalette
 from PyQt6.QtWidgets import QTextEdit, QWidget
 
 from meadowpy.core.settings import Settings
@@ -12,6 +12,11 @@ from meadowpy.ui.debug_toolbar import DebugToolBar
 from meadowpy.ui.dialogs.about_dialog import AboutDialog
 from meadowpy.ui.dialogs.accent_color_picker import AccentColorPickerDialog
 from meadowpy.ui.dialogs.example_library_dialog import ExampleLibraryDialog
+from meadowpy.ui.dialogs.ollama_setup_dialog import (
+    OllamaSetupDialog,
+    OllamaSetupCheckWorker,
+    _normalize_api_url,
+)
 from meadowpy.ui.dialogs.preferences_dialog import PreferencesDialog
 from meadowpy.ui.dialogs.shortcut_reference_dialog import ShortcutReferenceDialog
 from meadowpy.ui.file_explorer import FileExplorerPanel
@@ -30,6 +35,20 @@ class Recorder:
 
     def __call__(self, *args):
         self.calls.append(args)
+
+
+class FakeResponse:
+    def __init__(self, body=b""):
+        self.body = body
+
+    def read(self):
+        return self.body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
 
 
 class FakeSettings:
@@ -301,9 +320,11 @@ def test_ai_chat_panel_builds_context_streams_messages_and_handles_insert_links(
     requested = Recorder()
     stopped = Recorder()
     inserted = Recorder()
+    setup = Recorder()
     panel.chat_requested.connect(requested)
     panel.chat_stop_requested.connect(stopped)
     panel.code_insert_requested.connect(inserted)
+    panel.setup_requested.connect(setup)
 
     large_source = "print('start')\n" + ("x = 1\n" * 2000) + "print('end')\n"
     panel.update_editor_context("demo.py", "main", 2, large_source)
@@ -318,8 +339,12 @@ def test_ai_chat_panel_builds_context_streams_messages_and_handles_insert_links(
     panel.set_connected(False)
     assert not panel._input_area.isEnabled()
     assert panel._model_label.text() == "ollama"
+    assert not panel._setup_btn.isHidden()
+    panel._setup_btn.click()
+    assert setup.calls == [()]
     panel.set_connected(True)
     assert panel._input_area.isEnabled()
+    assert panel._setup_btn.isHidden()
 
     panel._input_area.setPlainText("Explain this file")
     panel._on_send()
@@ -575,6 +600,72 @@ def test_dialogs_sync_color_example_about_and_preferences_state(monkeypatch, qap
     about_dialog.deleteLater()
     example_dialog.deleteLater()
     color_dialog.deleteLater()
+
+
+def test_ollama_setup_dialog_updates_results_and_saves(qapp, tmp_path):
+    settings = Settings(tmp_path)
+    settings.set("ollama.api_url", "http://localhost:11434/")
+    settings.set("ollama.auto_connect", True)
+    settings.set("editor.theme", "custom")
+    settings.set("editor.custom_theme.base", "dark")
+    settings.set("editor.custom_theme.accent", "#445566")
+
+    dialog = OllamaSetupDialog(settings)
+    assert _normalize_api_url(" http://localhost:11434/ ") == "http://localhost:11434"
+    assert (
+        dialog._download_link.palette()
+        .color(QPalette.ColorRole.Link)
+        .name()
+        .upper()
+        == "#445566"
+    )
+    assert (
+        dialog._download_link.palette()
+        .color(QPalette.ColorRole.LinkVisited)
+        .name()
+        .upper()
+        == "#445566"
+    )
+    assert 'style="color: #445566;"' in dialog._download_link.text()
+
+    dialog._url_input.setText("http://localhost:11435/")
+    dialog._auto_connect.setChecked(False)
+    dialog._on_check_finished(True, "Ollama is running.", ["llama3", "qwen3"])
+
+    assert dialog._model_combo.isEnabled()
+    assert "2 model" in dialog._models_status.text()
+
+    dialog._model_combo.setCurrentText("qwen3")
+    dialog._save_settings()
+    assert settings.get("ollama.api_url") == "http://localhost:11435"
+    assert settings.get("ollama.auto_connect") is False
+    assert settings.get("ollama.selected_model") == "qwen3"
+    assert "qwen3" in dialog._selected_status.text()
+    assert dialog._close_btn.text() == "Close"
+
+    dialog._on_check_finished(False, "Cannot connect", [])
+    assert not dialog._model_combo.isEnabled()
+    assert "Cannot list models" in dialog._models_status.text()
+
+    dialog.deleteLater()
+
+
+def test_ollama_setup_check_worker_reports_health_and_models(monkeypatch):
+    responses = iter([
+        FakeResponse(b"Ollama is running"),
+        FakeResponse(b'{"models": [{"name": "llama3"}, {"id": "skip"}]}'),
+    ])
+    monkeypatch.setattr(
+        "meadowpy.ui.dialogs.ollama_setup_dialog.urllib.request.urlopen",
+        lambda request, timeout=5: next(responses),
+    )
+    worker = OllamaSetupCheckWorker("http://localhost:11434/")
+    finished = Recorder()
+    worker.finished.connect(finished)
+
+    worker.run()
+
+    assert finished.calls == [(True, "Ollama is running", ["llama3"])]
 
 
 class FakeToolbarWindow(QWidget):

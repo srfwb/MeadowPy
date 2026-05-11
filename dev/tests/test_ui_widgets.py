@@ -149,12 +149,24 @@ def test_model_selector_menu_builders_emit_user_choices(qapp):
     offline_menu = QMenu()
     popup._build_offline_menu(offline_menu)
     assert offline_menu.actions()[0].text() == "Ollama is not running"
+    setup_action = [
+        action for action in offline_menu.actions()
+        if action.text() == "Setup/check Ollama..."
+    ][0]
+    setup_action.trigger()
+    assert chosen.calls[-1] == ("__setup__",)
     offline_menu.actions()[-1].trigger()
     assert chosen.calls[-1] == ("__retry__",)
 
     no_models_menu = QMenu()
     popup._build_no_models_menu(no_models_menu)
     assert no_models_menu.actions()[0].text() == "No models installed"
+    setup_action = [
+        action for action in no_models_menu.actions()
+        if action.text() == "Setup/check Ollama..."
+    ][0]
+    setup_action.trigger()
+    assert chosen.calls[-1] == ("__setup__",)
     no_models_menu.actions()[-1].trigger()
     assert chosen.calls[-1] == ("__refresh__",)
 
@@ -171,6 +183,12 @@ def test_model_selector_menu_builders_emit_user_choices(qapp):
     assert qwen_action.isChecked() is True
     qwen_action.trigger()
     assert chosen.calls[-1] == ("qwen3",)
+    setup_action = [
+        action for action in models_menu.actions()
+        if action.text() == "Setup/check Ollama..."
+    ][0]
+    setup_action.trigger()
+    assert chosen.calls[-1] == ("__setup__",)
 
 
 def test_venv_dialog_validates_inputs_and_reports_success(monkeypatch, qapp, tmp_path):

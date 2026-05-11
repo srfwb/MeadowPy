@@ -47,7 +47,7 @@ class StatusBarManager:
 
         self._ollama_label = _ClickableLabel("AI: Offline")
         self._ollama_label.setToolTip(
-            "Ollama AI connection status \u2014 click to select a model"
+            "Ollama AI connection status - click to set up or select a model"
         )
         self._ollama_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self._ollama_label.setObjectName("ollamaStatusLabel")

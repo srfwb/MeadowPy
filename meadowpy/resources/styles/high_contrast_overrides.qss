@@ -178,6 +178,7 @@ QTabBar::tab:hover:!selected { background: #2A2A2A; color: #FFFFFF; }
 
 /* Accent-styled buttons across the app. */
 #aiChatSendBtn,
+#aiChatSetupBtn,
 #SearchPanel #searchRunBtn,
 #OutputPanel #replRunBtn,
 #exLibOpenBtn,
@@ -213,6 +214,7 @@ QPushButton:default:hover {
     background: transparent;
 }
 #aiChatSendBtn:hover,
+#aiChatSetupBtn:hover,
 #SearchPanel #searchRunBtn:hover,
 #OutputPanel #replRunBtn:hover,
 #exLibOpenBtn:hover,

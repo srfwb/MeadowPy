@@ -426,6 +426,7 @@ class MainWindow(QMainWindow):
         self._ai_chat_panel.chat_stop_requested.connect(
             self._ollama_client.cancel_chat
         )
+        self._ai_chat_panel.setup_requested.connect(self.action_ollama_setup)
         self._ai_chat_panel.code_insert_requested.connect(
             self._on_code_insert_requested
         )
