@@ -145,6 +145,7 @@ class MeadowPyApp:
 
         # Set app icon (prefer .ico on Windows for taskbar/title bar)
         self._app_icon: QIcon | None = None
+        self._app_icon_path: Path | None = None
         self._set_app_icon()
         self._splash: MeadowPySplashScreen | None = None
         self._splash_started_at = perf_counter()
@@ -217,6 +218,7 @@ class MeadowPyApp:
         # Add the .ico (carries multiple embedded sizes — best for Windows)
         ico_path = icons_dir / "meadowpy.ico"
         if ico_path.exists():
+            self._app_icon_path = ico_path
             icon.addFile(str(ico_path))
 
         # Add the high-res PNG and explicitly register common sizes so Qt
@@ -251,6 +253,87 @@ class MeadowPyApp:
         else:
             self._app_icon = None
 
+    def _apply_native_app_icon(self, widget: QWidget | None) -> None:
+        """Push MeadowPy's .ico onto a native Windows window handle.
+
+        Qt usually propagates QApplication/window icons correctly, but
+        Windows can briefly associate a pythonw.exe window with a generic
+        icon during first-run startup. Sending WM_SETICON after the HWND
+        exists makes the taskbar/title-bar icon deterministic.
+        """
+        icon_path_obj = getattr(self, "_app_icon_path", None)
+        if (
+            sys.platform != "win32"
+            or widget is None
+            or icon_path_obj is None
+        ):
+            return
+
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            hwnd = int(widget.winId())
+            if not hwnd:
+                return
+
+            user32 = ctypes.windll.user32
+            user32.LoadImageW.argtypes = [
+                wintypes.HINSTANCE,
+                wintypes.LPCWSTR,
+                wintypes.UINT,
+                ctypes.c_int,
+                ctypes.c_int,
+                wintypes.UINT,
+            ]
+            user32.LoadImageW.restype = wintypes.HANDLE
+            user32.SendMessageW.argtypes = [
+                wintypes.HWND,
+                wintypes.UINT,
+                wintypes.WPARAM,
+                wintypes.LPARAM,
+            ]
+            user32.SendMessageW.restype = wintypes.LPARAM
+
+            image_icon = 1
+            lr_load_from_file = 0x0010
+            lr_shared = 0x8000
+            wm_seticon = 0x0080
+            icon_small = 0
+            icon_big = 1
+            icon_small2 = 2
+            sm_cxicon = 11
+            sm_cyicon = 12
+            sm_cxsmicon = 49
+            sm_cysmicon = 50
+            flags = lr_load_from_file | lr_shared
+            icon_path = str(icon_path_obj)
+
+            big_icon = user32.LoadImageW(
+                None,
+                icon_path,
+                image_icon,
+                user32.GetSystemMetrics(sm_cxicon),
+                user32.GetSystemMetrics(sm_cyicon),
+                flags,
+            )
+            small_icon = user32.LoadImageW(
+                None,
+                icon_path,
+                image_icon,
+                user32.GetSystemMetrics(sm_cxsmicon),
+                user32.GetSystemMetrics(sm_cysmicon),
+                flags,
+            )
+
+            if big_icon:
+                user32.SendMessageW(hwnd, wm_seticon, icon_big, int(big_icon))
+            if small_icon:
+                user32.SendMessageW(hwnd, wm_seticon, icon_small, int(small_icon))
+                user32.SendMessageW(hwnd, wm_seticon, icon_small2, int(small_icon))
+        except Exception:
+            pass
+
     def _load_app_font(self) -> None:
         """Set Segoe UI as the application default UI font."""
         self._app_font = QFont("Segoe UI", 10)
@@ -262,6 +345,7 @@ class MeadowPyApp:
         self._splash.set_status_text(message)
         self._splash.center_on_screen()
         self._splash.show()
+        self._apply_native_app_icon(self._splash)
         self._splash_started_at = perf_counter()
         self._process_pending_ui_events()
 
@@ -319,6 +403,7 @@ class MeadowPyApp:
         self._set_splash_status("Launching MeadowPy...")
         self._wait_for_minimum_splash_time()
         self._window.show()
+        self._apply_native_app_icon(self._window)
         self._window.raise_()
         self._window.activateWindow()
         self._process_pending_ui_events()
