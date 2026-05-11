@@ -254,7 +254,7 @@ class TabManager(QTabWidget):
             if reply == QMessageBox.StandardButton.Cancel:
                 return False
             if reply == QMessageBox.StandardButton.Save:
-                main_window = self.parent()
+                main_window = self.window()
                 if hasattr(main_window, "action_save"):
                     main_window.action_save()
         self.removeTab(index)
@@ -283,7 +283,7 @@ class TabManager(QTabWidget):
                 if reply == QMessageBox.StandardButton.Cancel:
                     return False
                 if reply == QMessageBox.StandardButton.Save:
-                    main_window = self.parent()
+                    main_window = self.window()
                     if hasattr(main_window, "action_save"):
                         main_window.action_save()
         return True
