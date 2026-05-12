@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
     def _create_tab_manager(self) -> None:
         from PyQt6.QtWidgets import QFrame, QVBoxLayout
 
-        self._tab_manager = TabManager(self._settings, self)
+        self._tab_manager = TabManager(self._settings, self._file_manager, self)
 
         # Wrap the editor in a styled container so it picks up the same
         # rounded-bottom-corner border treatment as the surrounding panels.

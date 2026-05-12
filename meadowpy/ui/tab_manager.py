@@ -143,9 +143,10 @@ class TabManager(QTabWidget):
 
     tab_changed = pyqtSignal(object)  # emits CodeEditor or None
 
-    def __init__(self, settings: Settings, parent=None):
+    def __init__(self, settings: Settings, file_manager=None, parent=None):
         super().__init__(parent)
         self._settings = settings
+        self._file_manager = file_manager
         self._untitled_counter = 1
 
         self.setObjectName("editorTabs")
@@ -254,9 +255,13 @@ class TabManager(QTabWidget):
             if reply == QMessageBox.StandardButton.Cancel:
                 return False
             if reply == QMessageBox.StandardButton.Save:
-                main_window = self.parent()
-                if hasattr(main_window, "action_save"):
-                    main_window.action_save()
+                if self._file_manager:
+                    if editor.file_path:
+                        self._file_manager.save_file(editor.file_path, editor.text())
+                    else:
+                        path = self._file_manager.save_file_as(editor.text(), parent=self)
+                        if not path:
+                            return False
         self.removeTab(index)
         return True
 
@@ -283,9 +288,13 @@ class TabManager(QTabWidget):
                 if reply == QMessageBox.StandardButton.Cancel:
                     return False
                 if reply == QMessageBox.StandardButton.Save:
-                    main_window = self.parent()
-                    if hasattr(main_window, "action_save"):
-                        main_window.action_save()
+                    if self._file_manager:
+                        if editor.file_path:
+                            self._file_manager.save_file(editor.file_path, editor.text())
+                        else:
+                            path = self._file_manager.save_file_as(editor.text(), parent=self)
+                            if not path:
+                                return False
         return True
 
     def current_editor(self) -> CodeEditor | None:
