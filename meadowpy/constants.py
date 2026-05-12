@@ -2,7 +2,7 @@
 
 APP_NAME = "MeadowPy"
 APP_ID = "meadowpy.ide.meadowpy"
-VERSION = "1.0.9"
+VERSION = "1.1.5"
 CONFIG_DIR_NAME = ".meadowpy"
 SETTINGS_FILENAME = "settings.json"
 RECENT_FILES_MAX = 15
