@@ -3,14 +3,15 @@
 from pathlib import Path
 
 from PyQt6.QtCore import pyqtSignal, Qt, QEvent
-from PyQt6.QtGui import QColor, QKeySequence
-from PyQt6.QtWidgets import QToolTip
+from PyQt6.QtGui import QColor, QKeySequence, QPainter, QPen
+from PyQt6.QtWidgets import QToolTip, QWidget
 from PyQt6.Qsci import QsciScintilla
 
 from meadowpy.core.settings import Settings
 from meadowpy.editor.editor_config import EditorConfigurator
 from meadowpy.editor.smart_indent import SmartIndentHandler
 from meadowpy.editor.auto_close import AutoCloseHandler
+from meadowpy.resources.resource_loader import theme_is_dark
 
 
 # Marker IDs for gutter symbols
@@ -22,6 +23,24 @@ MARKER_CURRENT_LINE = 1  # Yellow arrow for current execution line during debug
 # (8 = INDIC_CONTAINER used by findFirst/brace matching), so start at 14.
 INDICATOR_ERROR = 14
 INDICATOR_WARNING = 15
+
+
+class _IndentGuideOverlay(QWidget):
+    """Transparent overlay that paints solid editor indentation guides."""
+
+    def __init__(self, editor: "CodeEditor"):
+        super().__init__(editor)
+        self._editor = editor
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        try:
+            self._editor._draw_indentation_guides(painter)
+        finally:
+            painter.end()
 
 
 class CodeEditor(QsciScintilla):
@@ -55,6 +74,9 @@ class CodeEditor(QsciScintilla):
         self._apply_marker_colors()
 
         EditorConfigurator.apply(self, settings)
+        self._indent_guide_overlay = _IndentGuideOverlay(self)
+        self._indent_guide_overlay.setGeometry(self.rect())
+        self._indent_guide_overlay.raise_()
         self._connect_signals()
 
         # QScintilla reserves Ctrl+/ for one of its own built-in commands
@@ -73,6 +95,8 @@ class CodeEditor(QsciScintilla):
     def _connect_signals(self) -> None:
         self.modificationChanged.connect(self._on_modification_changed)
         self.linesChanged.connect(self._update_margin_width)
+        self.linesChanged.connect(self._indent_guide_overlay.update)
+        self.textChanged.connect(self._indent_guide_overlay.update)
         self.marginClicked.connect(self._on_margin_clicked)
 
     @property
@@ -98,6 +122,154 @@ class CodeEditor(QsciScintilla):
         """Re-apply settings (called when preferences change)."""
         self._settings = settings
         EditorConfigurator.apply(self, settings)
+        self._indent_guide_overlay.update()
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        """Keep the transparent indentation guide overlay in sync."""
+        super().paintEvent(event)
+        overlay = getattr(self, "_indent_guide_overlay", None)
+        if overlay is not None:
+            overlay.setGeometry(self.rect())
+            overlay.raise_()
+            overlay.update()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        overlay = getattr(self, "_indent_guide_overlay", None)
+        if overlay is not None:
+            overlay.setGeometry(self.rect())
+            overlay.update()
+
+    @staticmethod
+    def _indent_columns(text: str, tab_width: int) -> int:
+        """Return leading indentation width in visual columns."""
+        columns = 0
+        tab_width = max(tab_width, 1)
+        for char in text:
+            if char == " ":
+                columns += 1
+            elif char == "\t":
+                columns += tab_width - (columns % tab_width)
+            else:
+                break
+        return columns
+
+    def _effective_guide_indent_columns(self, line: int, tab_width: int) -> int:
+        """Return the indent width to paint, borrowing from blank lines."""
+        text = self.text(line).rstrip("\r\n")
+        if text.strip():
+            return self._indent_columns(text, tab_width)
+
+        for probe in range(line - 1, -1, -1):
+            previous = self.text(probe).rstrip("\r\n")
+            if previous.strip():
+                return self._indent_columns(previous, tab_width)
+        return 0
+
+    def _draw_indentation_guides(self, painter: QPainter) -> None:
+        """Draw solid indentation guides for the visible editor lines."""
+        if not self._settings.get("editor.show_indentation_guides"):
+            return
+
+        tab_width = int(self._settings.get("editor.tab_width") or 4)
+        if tab_width <= 0:
+            return
+
+        theme_name = self._settings.get("editor.theme")
+        custom_base = self._settings.get("editor.custom_theme.base")
+        if theme_name == "default_high_contrast":
+            guide_color = QColor("#FFFFFF")
+        elif theme_is_dark(theme_name, custom_base):
+            guide_color = QColor("#565E66")
+        else:
+            guide_color = QColor("#B8C0C8")
+
+        first_line, last_line = self._visible_document_line_range()
+        if last_line <= first_line:
+            return
+
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        pen = QPen(guide_color)
+        pen.setWidth(1)
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+
+        segments: dict[tuple[int, int], list[tuple[int, int]]] = {}
+        for line in range(first_line, last_line):
+            indent_columns = self._effective_guide_indent_columns(line, tab_width)
+            if indent_columns < tab_width:
+                continue
+
+            y_top = self._line_y(line)
+            line_height = self._line_height(line)
+            if y_top + line_height < 0 or y_top > self.height():
+                continue
+
+            for column in range(tab_width, indent_columns + 1, tab_width):
+                x = self._guide_column_x(line, column)
+                if 0 <= x <= self.width():
+                    segments.setdefault((column, x), []).append(
+                        (y_top - 1, y_top + line_height + 1)
+                    )
+
+        for (_column, x), line_segments in segments.items():
+            for top, bottom in self._merge_line_segments(line_segments):
+                painter.drawLine(x, top, x, bottom)
+
+    def _visible_document_line_range(self) -> tuple[int, int]:
+        """Return the physical document lines currently worth painting."""
+        try:
+            first_line = self.firstVisibleLine()
+        except AttributeError:
+            first_line = 0
+
+        try:
+            lines_on_screen = int(self.SendScintilla(2370))  # SCI_LINESONSCREEN
+        except (TypeError, RuntimeError):
+            lines_on_screen = max(self.height() // max(self.fontMetrics().height(), 1), 1)
+
+        last_line = min(self.lines(), first_line + lines_on_screen + 2)
+        return max(first_line, 0), max(last_line, 0)
+
+    def _guide_column_x(self, line: int, column: int) -> int:
+        """Return the x-coordinate for a visual column on a document line."""
+        try:
+            pos = int(self.SendScintilla(2456, line, column))  # SCI_FINDCOLUMN
+        except (TypeError, RuntimeError):
+            pos = self.positionFromLineIndex(line, min(column, len(self.text(line))))
+        return int(self.SendScintilla(2164, 0, pos))  # SCI_POINTXFROMPOSITION
+
+    def _line_y(self, line: int) -> int:
+        """Return the y-coordinate for the top of a document line."""
+        pos = self.positionFromLineIndex(line, 0)
+        return int(self.SendScintilla(2165, 0, pos))  # SCI_POINTYFROMPOSITION
+
+    def _line_height(self, line: int) -> int:
+        """Return the rendered height for a document line."""
+        try:
+            return int(self.SendScintilla(2279, line))  # SCI_TEXTHEIGHT
+        except (TypeError, RuntimeError):
+            return self.fontMetrics().height()
+
+    @staticmethod
+    def _merge_line_segments(
+        segments: list[tuple[int, int]]
+    ) -> list[tuple[int, int]]:
+        """Merge adjacent vertical line fragments into continuous strokes."""
+        if not segments:
+            return []
+
+        merged: list[tuple[int, int]] = []
+        start, end = sorted(segments)[0]
+        for next_start, next_end in sorted(segments)[1:]:
+            if next_start <= end + 1:
+                end = max(end, next_end)
+            else:
+                merged.append((start, end))
+                start, end = next_start, next_end
+        merged.append((start, end))
+        return merged
 
     # ── Comment / Uncomment ──────────────────────────────────────────
 

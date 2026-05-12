@@ -118,6 +118,76 @@ def test_editor_configurator_applies_disabled_editor_features(qapp, tmp_path):
     editor.deleteLater()
 
 
+class GuideStyleHarness:
+    def __init__(self):
+        self.indentation_guides = None
+        self.scintilla_calls = []
+
+    def setIndentationGuides(self, enabled):
+        self.indentation_guides = enabled
+
+    def SendScintilla(self, *args):
+        self.scintilla_calls.append(args)
+
+
+class DictSettings:
+    def __init__(self, values):
+        self.values = values
+
+    def get(self, key, default=None):
+        return self.values.get(key, default)
+
+
+def test_editor_configurator_disables_builtin_indentation_guides():
+    editor = GuideStyleHarness()
+    settings = DictSettings({
+        "editor.show_indentation_guides": True,
+        "editor.theme": "default_dark",
+        "editor.custom_theme.base": "dark",
+    })
+
+    EditorConfigurator._apply_indentation_guides(editor, settings)
+
+    assert editor.indentation_guides is False
+    assert editor.scintilla_calls == [(2132, 0)]
+
+    disabled = GuideStyleHarness()
+    disabled_settings = DictSettings({
+        "editor.show_indentation_guides": False,
+    })
+
+    EditorConfigurator._apply_indentation_guides(disabled, disabled_settings)
+
+    assert disabled.indentation_guides is False
+    assert disabled.scintilla_calls == [(2132, 0)]
+
+
+class GuideIndentHarness:
+    def __init__(self, lines):
+        self.lines = lines
+
+    _indent_columns = staticmethod(CodeEditor._indent_columns)
+
+    def text(self, line):
+        return self.lines[line]
+
+
+def test_custom_indentation_guide_helpers_count_and_merge_lines():
+    harness = GuideIndentHarness([
+        "def greet():\n",
+        "    print('hi')\n",
+        "\n",
+    ])
+
+    assert CodeEditor._indent_columns("  \tvalue", 4) == 4
+    assert CodeEditor._effective_guide_indent_columns(harness, 1, 4) == 4
+    assert CodeEditor._effective_guide_indent_columns(harness, 2, 4) == 4
+    assert CodeEditor._merge_line_segments([(0, 10), (10, 20), (30, 35)]) == [
+        (0, 20),
+        (30, 35),
+    ]
+
+
 def test_display_name_settings_modification_zoom_and_margin_helpers(qapp, tmp_path):
     editor = make_editor(qapp, tmp_path)
     seen = []

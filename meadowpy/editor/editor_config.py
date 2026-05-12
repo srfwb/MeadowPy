@@ -23,6 +23,7 @@ class EditorConfigurator:
         EditorConfigurator._apply_brace_matching(editor, settings)
         EditorConfigurator._apply_word_wrap(editor, settings)
         EditorConfigurator._apply_lexer(editor, settings)
+        EditorConfigurator._apply_indentation_guides(editor, settings)
         EditorConfigurator._apply_autocompletion(editor, settings)
         EditorConfigurator._apply_margins(editor, settings)
         EditorConfigurator._apply_breakpoint_margin(editor, settings)
@@ -46,7 +47,17 @@ class EditorConfigurator:
         editor.setAutoIndent(settings.get("editor.auto_indent"))
         editor.setTabIndents(True)
         editor.setBackspaceUnindents(True)
-        editor.setIndentationGuides(settings.get("editor.show_indentation_guides"))
+
+    @staticmethod
+    def _apply_indentation_guides(
+        editor: QsciScintilla, settings: Settings
+    ) -> None:
+        """Disable Scintilla's dotted guides; CodeEditor paints solid ones."""
+        editor.setIndentationGuides(False)
+
+        SCI_SETINDENTATIONGUIDES = 2132
+        SC_IV_NONE = 0
+        editor.SendScintilla(SCI_SETINDENTATIONGUIDES, SC_IV_NONE)
 
     @staticmethod
     def _apply_selection(editor: QsciScintilla, settings: Settings) -> None:
