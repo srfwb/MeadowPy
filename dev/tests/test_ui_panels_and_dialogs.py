@@ -570,6 +570,8 @@ def test_dialogs_sync_color_example_about_and_preferences_state(monkeypatch, qap
     assert not prefs._custom_theme_container.isHidden()
     prefs._refresh_accent_swatch("#112233")
     assert prefs._accent_hex_label.text() == "#112233"
+    prefs._show_lint_style_issues.setChecked(False)
+    assert prefs._pending_changes["editor.show_lint_style_issues"] is False
 
     from meadowpy.ui.dialogs import accent_color_picker as accent_module
 
@@ -594,6 +596,7 @@ def test_dialogs_sync_color_example_about_and_preferences_state(monkeypatch, qap
     assert settings.get("editor.font_size") == 17
     assert settings.get("editor.theme") == "custom"
     assert settings.get("editor.custom_theme.accent") == "#445566"
+    assert settings.get("editor.show_lint_style_issues") is False
     assert prefs._pending_changes == {}
 
     prefs.deleteLater()

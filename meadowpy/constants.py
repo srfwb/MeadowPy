@@ -50,6 +50,7 @@ DEFAULT_SETTINGS = {
     "editor.linting_enabled": True,
     "editor.linter": "flake8",
     "editor.lint_on_save": True,
+    "editor.show_lint_style_issues": True,
     "editor.lint_delay_ms": 1500,
 
     # Phase 3: Code Execution

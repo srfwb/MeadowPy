@@ -332,6 +332,16 @@ class PreferencesDialog(QDialog):
         )
         form.addRow("", self._lint_on_save)
 
+        # Styling issue visibility
+        self._show_lint_style_issues = QCheckBox("Show styling issues")
+        self._show_lint_style_issues.setChecked(
+            self._settings.get("editor.show_lint_style_issues")
+        )
+        self._show_lint_style_issues.toggled.connect(
+            lambda v: self._stage("editor.show_lint_style_issues", v)
+        )
+        form.addRow("", self._show_lint_style_issues)
+
         return page
 
     def _create_execution_page(self) -> QWidget:

@@ -151,11 +151,14 @@ def test_outline_refresh_visibility_and_lint_runner_paths():
     )
     lint_runner = SimpleNamespace(
         calls=[],
-        run_lint=lambda text, path, linter: lint_runner.calls.append((text, path, linter)),
+        run_lint=lambda text, path, linter, include_style_issues: lint_runner.calls.append(
+            (text, path, linter, include_style_issues)
+        ),
     )
     settings = FakeSettings({
         "editor.linting_enabled": True,
         "editor.linter": "flake8",
+        "editor.show_lint_style_issues": False,
     })
     window = SimpleNamespace(
         _settings=settings,
@@ -171,7 +174,7 @@ def test_outline_refresh_visibility_and_lint_runner_paths():
     controller._do_lint()
 
     assert symbol_outline.updates == [editor.text_value, editor.text_value, editor.text_value]
-    assert lint_runner.calls == [(editor.text_value, "demo.py", "flake8")]
+    assert lint_runner.calls == [(editor.text_value, "demo.py", "flake8", False)]
     assert controller._lint_target_editor is editor
 
     symbol_outline.visible = False

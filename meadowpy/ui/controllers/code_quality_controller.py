@@ -80,6 +80,7 @@ class CodeQualityController(MainWindowController):
                 editor.text(),
                 editor.file_path,
                 self._settings.get("editor.linter"),
+                self._settings.get("editor.show_lint_style_issues", True),
             )
 
     def _on_lint_finished(self, issues: list) -> None:

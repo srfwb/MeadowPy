@@ -452,7 +452,11 @@ class WorkspaceController(MainWindowController):
         # Toggle outline/problems visibility based on settings
         if key == "editor.show_symbol_outline":
             self._symbol_outline.setVisible(value)
-        if key in {"editor.linter", "editor.linting_enabled"}:
+        if key in {
+            "editor.linter",
+            "editor.linting_enabled",
+            "editor.show_lint_style_issues",
+        }:
             self._refresh_lint_after_settings_change(
                 reveal_panel=key == "editor.linting_enabled" and bool(value)
             )

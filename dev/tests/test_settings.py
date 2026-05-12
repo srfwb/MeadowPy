@@ -48,6 +48,20 @@ def test_save_and_load_round_trip(tmp_path):
     assert reloaded.get("window.recent_files") == ["alpha.py"]
 
 
+def test_lint_style_issues_default_on_and_persists(tmp_path):
+    settings = Settings(tmp_path)
+
+    assert settings.get("editor.show_lint_style_issues") is True
+
+    settings.set("editor.show_lint_style_issues", False)
+    settings.save()
+
+    reloaded = Settings(tmp_path)
+    reloaded.load()
+
+    assert reloaded.get("editor.show_lint_style_issues") is False
+
+
 def test_load_invalid_json_resets_to_empty_data(tmp_path):
     config_file = tmp_path / "settings.json"
     config_file.write_text("{not json", encoding="utf-8")

@@ -10,6 +10,26 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from meadowpy.core.qt_threads import stop_qthread
 
 
+FLAKE8_NON_STYLE_CODES = frozenset({"E901", "E902", "E999"})
+PYLINT_STYLE_WARNING_CODES = frozenset({"W0301", "W0311", "W0312", "W0313"})
+
+
+def _is_style_issue(linter: str, code: str) -> bool:
+    """Return whether a linter code is style-only noise for the UI toggle."""
+    normalized = code.upper()
+    if linter == "flake8":
+        return (
+            normalized.startswith(("E", "W"))
+            and normalized not in FLAKE8_NON_STYLE_CODES
+        )
+    if linter == "pylint":
+        return (
+            normalized.startswith(("C", "R"))
+            or normalized in PYLINT_STYLE_WARNING_CODES
+        )
+    return False
+
+
 @dataclass
 class LintIssue:
     """A single lint issue from flake8 or pylint."""
@@ -27,11 +47,18 @@ class LintWorker(QObject):
     finished = pyqtSignal(list)  # list[LintIssue]
     error_occurred = pyqtSignal(str)  # error message for UI
 
-    def __init__(self, source_code: str, file_path: str | None, linter: str):
+    def __init__(
+        self,
+        source_code: str,
+        file_path: str | None,
+        linter: str,
+        include_style_issues: bool = True,
+    ):
         super().__init__()
         self._source = source_code
         self._file_path = file_path
         self._linter = linter
+        self._include_style_issues = include_style_issues
 
     def run(self) -> None:
         """Execute the linter and emit results."""
@@ -91,7 +118,10 @@ class LintWorker(QObject):
                 code = m.group(3)
                 message = m.group(4)
                 severity = "error" if code.startswith(("E", "F")) else "warning"
-                issues.append(LintIssue(line_num, col, code, message, severity))
+                if self._include_style_issues or not _is_style_issue(
+                    self._linter, code
+                ):
+                    issues.append(LintIssue(line_num, col, code, message, severity))
         return issues
 
     def _run_pylint(self) -> list[LintIssue]:
@@ -132,7 +162,10 @@ class LintWorker(QObject):
                 code = m.group(3)
                 message = m.group(4)
                 severity = "error" if code.startswith(("E", "F")) else "warning"
-                issues.append(LintIssue(line_num, col, code, message, severity))
+                if self._include_style_issues or not _is_style_issue(
+                    self._linter, code
+                ):
+                    issues.append(LintIssue(line_num, col, code, message, severity))
         return issues
 
 
@@ -151,7 +184,11 @@ class LintRunner(QObject):
         self._generation: int = 0
 
     def run_lint(
-        self, source_code: str, file_path: str | None, linter: str
+        self,
+        source_code: str,
+        file_path: str | None,
+        linter: str,
+        include_style_issues: bool = True,
     ) -> None:
         """Start a lint run. Cancels any in-progress run."""
         self._cancel_current()
@@ -159,7 +196,9 @@ class LintRunner(QObject):
         gen = self._generation
 
         self._thread = QThread()
-        self._worker = LintWorker(source_code, file_path, linter)
+        self._worker = LintWorker(
+            source_code, file_path, linter, include_style_issues
+        )
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(

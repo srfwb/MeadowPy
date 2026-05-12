@@ -19,6 +19,21 @@ def test_parse_flake8_output_uses_zero_based_positions_and_severity():
     ]
 
 
+def test_parse_flake8_output_can_hide_style_issues():
+    worker = LintWorker(
+        "print('x')\n", "demo.py", "flake8", include_style_issues=False
+    )
+
+    issues = worker._parse_flake8_output(
+        "demo.py:1:2: E225 missing whitespace around operator\n"
+        "demo.py:2:1: W291 trailing whitespace\n"
+        "demo.py:3:7: F821 undefined name 'name'\n"
+        "demo.py:4:1: E999 SyntaxError: invalid syntax\n"
+    )
+
+    assert [issue.code for issue in issues] == ["F821", "E999"]
+
+
 def test_parse_pylint_output_uses_expected_columns():
     worker = LintWorker("print('x')\n", "demo.py", "pylint")
 
@@ -31,6 +46,22 @@ def test_parse_pylint_output_uses_expected_columns():
         (3, 2, "C0114", "warning"),
         (6, 0, "E0602", "error"),
     ]
+
+
+def test_parse_pylint_output_can_hide_style_issues():
+    worker = LintWorker(
+        "print('x')\n", "demo.py", "pylint", include_style_issues=False
+    )
+
+    issues = worker._parse_pylint_output(
+        "1:0: C0114 missing-module-docstring\n"
+        "2:4: W0311 bad-indentation\n"
+        "3:0: W0611 unused-import\n"
+        "4:0: R0903 too-few-public-methods\n"
+        "5:6: E0602 undefined-variable\n"
+    )
+
+    assert [issue.code for issue in issues] == ["W0611", "E0602"]
 
 
 def test_run_emits_install_error_when_flake8_module_is_missing(monkeypatch):
@@ -163,8 +194,8 @@ def test_lint_runner_only_emits_errors_for_latest_generation():
 
 
 class FakeLintWorker:
-    def __init__(self, source_code, file_path, linter):
-        self.args = (source_code, file_path, linter)
+    def __init__(self, source_code, file_path, linter, include_style_issues=True):
+        self.args = (source_code, file_path, linter, include_style_issues)
         self.finished = FlexibleSignal()
         self.error_occurred = DummySignal()
         self.moved_to = None
@@ -194,8 +225,10 @@ def test_run_lint_starts_worker_thread_and_emits_latest_results(monkeypatch):
         threads.append(thread)
         return thread
 
-    def make_worker(source_code, file_path, linter):
-        worker = FakeLintWorker(source_code, file_path, linter)
+    def make_worker(source_code, file_path, linter, include_style_issues=True):
+        worker = FakeLintWorker(
+            source_code, file_path, linter, include_style_issues
+        )
         workers.append(worker)
         return worker
 
@@ -207,7 +240,7 @@ def test_run_lint_starts_worker_thread_and_emits_latest_results(monkeypatch):
 
     runner.run_lint("x=1\n", "demo.py", "flake8")
 
-    assert workers[0].args == ("x=1\n", "demo.py", "flake8")
+    assert workers[0].args == ("x=1\n", "demo.py", "flake8", True)
     assert workers[0].moved_to is threads[0]
     assert threads[0].start_called == 1
     assert finished.calls == [(["issue"],)]
