@@ -151,6 +151,11 @@ class WorkspaceController(MainWindowController):
             if self._file_manager.save_file(editor.file_path, editor.text()):
                 editor.setModified(False)
                 self._tab_manager.update_tab_title(self._tab_manager.currentIndex())
+            else:
+                QMessageBox.critical(
+                    self.window, "Error",
+                    f"Could not save file:\n{editor.file_path}",
+                )
         else:
             self.action_save_as()
 

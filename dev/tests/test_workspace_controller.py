@@ -250,7 +250,7 @@ def test_save_and_save_as_update_editor_state_and_tab_title(tmp_path):
     tabs = WorkspaceTabs([editor])
     file_manager = SimpleNamespace(
         saved=[],
-        save_file=lambda path, text: file_manager.saved.append((path, text)),
+        save_file=lambda path, text: file_manager.saved.append((path, text)) or True,
         save_file_as=lambda text, parent=None: str(tmp_path / "saved_as.py"),
     )
     window = SimpleNamespace(_tab_manager=tabs, _file_manager=file_manager)
