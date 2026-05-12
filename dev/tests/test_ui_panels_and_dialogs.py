@@ -2,15 +2,19 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QAction, QKeyEvent, QPalette
+from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtGui import QAction, QColor, QKeyEvent, QPalette
 from PyQt6.QtWidgets import QTextEdit, QWidget
 
 from meadowpy.core.settings import Settings
 from meadowpy.ui.ai_chat_panel import AIChatPanel
 from meadowpy.ui.debug_toolbar import DebugToolBar
 from meadowpy.ui.dialogs.about_dialog import AboutDialog
-from meadowpy.ui.dialogs.accent_color_picker import AccentColorPickerDialog
+from meadowpy.ui.dialogs.accent_color_picker import (
+    AccentColorPickerDialog,
+    _HueBar,
+    _SVCanvas,
+)
 from meadowpy.ui.dialogs.example_library_dialog import ExampleLibraryDialog
 from meadowpy.ui.dialogs.ollama_setup_dialog import (
     OllamaSetupDialog,
@@ -514,6 +518,128 @@ def test_debug_toolbar_and_keyword_popup_expose_action_state_and_content(qapp):
     popup.deleteLater()
     toolbar.deleteLater()
     window.deleteLater()
+
+
+def test_accent_color_picker_internal_widgets_pick_render_and_clamp(qapp):
+    class FakeMouseEvent:
+        def __init__(
+            self,
+            x=0.0,
+            y=0.0,
+            *,
+            button=Qt.MouseButton.LeftButton,
+            buttons=Qt.MouseButton.LeftButton,
+        ):
+            self._position = QPointF(float(x), float(y))
+            self._button = button
+            self._buttons = buttons
+
+        def position(self):
+            return self._position
+
+        def button(self):
+            return self._button
+
+        def buttons(self):
+            return self._buttons
+
+    canvas = _SVCanvas()
+    canvas.resize(240, 200)
+    sv_changed = Recorder()
+    canvas.sv_changed.connect(sv_changed)
+
+    canvas.set_hsv(0.25, 0.5, 0.75)
+    assert canvas._hue == 0.25
+    assert canvas._sat == 0.5
+    assert canvas._val == 0.75
+    assert sv_changed.calls == []
+    assert not canvas.grab().isNull()
+
+    canvas._pick(canvas.width() * 2, -10)
+    assert sv_changed.calls[-1] == (1.0, 1.0)
+    canvas._pick(-10, canvas.height() * 2)
+    assert sv_changed.calls[-1] == (0.0, 0.0)
+
+    canvas.mousePressEvent(FakeMouseEvent(canvas.width() / 2, canvas.height() / 2))
+    sat, val = sv_changed.calls[-1]
+    assert abs(sat - 0.5) < 0.01
+    assert abs(val - 0.5) < 0.01
+    call_count = len(sv_changed.calls)
+    canvas.mousePressEvent(
+        FakeMouseEvent(
+            canvas.width() / 2,
+            canvas.height() / 2,
+            button=Qt.MouseButton.RightButton,
+        )
+    )
+    canvas.mouseMoveEvent(
+        FakeMouseEvent(
+            canvas.width(),
+            canvas.height(),
+            buttons=Qt.MouseButton.NoButton,
+        )
+    )
+    assert len(sv_changed.calls) == call_count
+    canvas.mouseMoveEvent(
+        FakeMouseEvent(
+            canvas.width(),
+            canvas.height(),
+            buttons=Qt.MouseButton.LeftButton,
+        )
+    )
+    assert sv_changed.calls[-1] == (1.0, 0.0)
+
+    huebar = _HueBar()
+    huebar.resize(20, 200)
+    hue_changed = Recorder()
+    huebar.hue_changed.connect(hue_changed)
+
+    huebar.set_hue(0.4)
+    assert huebar._hue == 0.4
+    assert hue_changed.calls == []
+    assert not huebar.grab().isNull()
+
+    huebar._pick(huebar.height() * 2)
+    assert hue_changed.calls[-1] == (1.0,)
+    huebar._pick(-10)
+    assert hue_changed.calls[-1] == (0.0,)
+
+    huebar.mousePressEvent(FakeMouseEvent(0, huebar.height() / 2))
+    (hue,) = hue_changed.calls[-1]
+    assert abs(hue - 0.5) < 0.01
+    call_count = len(hue_changed.calls)
+    huebar.mousePressEvent(
+        FakeMouseEvent(
+            0,
+            huebar.height() / 2,
+            button=Qt.MouseButton.RightButton,
+        )
+    )
+    huebar.mouseMoveEvent(
+        FakeMouseEvent(0, huebar.height(), buttons=Qt.MouseButton.NoButton)
+    )
+    assert len(hue_changed.calls) == call_count
+    huebar.mouseMoveEvent(
+        FakeMouseEvent(0, huebar.height(), buttons=Qt.MouseButton.LeftButton)
+    )
+    assert hue_changed.calls[-1] == (1.0,)
+
+    huebar.deleteLater()
+    canvas.deleteLater()
+
+
+def test_accent_color_picker_preserves_hue_for_grayscale_colors(qapp):
+    dialog = AccentColorPickerDialog("#336699")
+
+    dialog._on_hue_changed(0.33)
+    previous_hue = dialog._h
+    dialog._push_color(QColor("#808080"))
+
+    assert dialog._h == previous_hue
+    assert dialog._s == 0.0
+    assert dialog.selected_hex() == "#808080"
+
+    dialog.deleteLater()
 
 
 def test_dialogs_sync_color_example_about_and_preferences_state(monkeypatch, qapp, tmp_path):
