@@ -12,10 +12,20 @@ from meadowpy.ui.welcome_widget import TEMPLATES, WelcomeWidget
 class ParentWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.saved = 0
 
-    def action_save(self):
+
+class FakeFileManager:
+    def __init__(self):
+        self.saved = 0
+        self.saved_as = 0
+
+    def save_file(self, file_path, content):
         self.saved += 1
+        return True
+
+    def save_file_as(self, content, parent=None):
+        self.saved_as += 1
+        return "/fake/saved.py"
 
 
 class FakeSignal:
@@ -50,6 +60,9 @@ class FakeTabEditor(QWidget):
     def setText(self, text):
         self._text = text
 
+    def text(self):
+        return self._text
+
     def setModified(self, modified):
         self._modified = modified
 
@@ -65,7 +78,7 @@ def make_settings(tmp_path):
 def test_tab_manager_creates_deduplicates_titles_and_paths(qapp, tmp_path):
     settings = make_settings(tmp_path)
     parent = ParentWindow()
-    tabs = TabManager(settings, parent)
+    tabs = TabManager(settings, parent=parent)
     changed = []
     tabs.tab_changed.connect(changed.append)
 
@@ -99,7 +112,8 @@ def test_close_tab_prompt_save_discard_cancel_and_close_all(monkeypatch, qapp, t
     monkeypatch.setattr(tab_module, "CodeEditor", FakeTabEditor)
     settings = make_settings(tmp_path)
     parent = ParentWindow()
-    tabs = TabManager(settings, parent)
+    fake_fm = FakeFileManager()
+    tabs = TabManager(settings, fake_fm, parent)
 
     first = tabs.new_tab(str(tmp_path / "first.py"), "print(1)\n")
     first.setModified(True)
@@ -117,7 +131,7 @@ def test_close_tab_prompt_save_discard_cancel_and_close_all(monkeypatch, qapp, t
         lambda *args, **kwargs: QMessageBox.StandardButton.Save,
     )
     assert tabs.close_tab(tabs.indexOf(first)) is True
-    assert parent.saved == 1
+    assert fake_fm.saved == 1
 
     second = tabs.new_tab(str(tmp_path / "second.py"), "print(2)\n")
     third = tabs.new_tab(str(tmp_path / "third.py"), "print(3)\n")
@@ -139,7 +153,8 @@ def test_prompt_save_all_respects_cancel_and_save(monkeypatch, qapp, tmp_path):
     monkeypatch.setattr(tab_module, "CodeEditor", FakeTabEditor)
     settings = make_settings(tmp_path)
     parent = ParentWindow()
-    tabs = TabManager(settings, parent)
+    fake_fm = FakeFileManager()
+    tabs = TabManager(settings, fake_fm, parent)
     editor = tabs.new_tab(str(tmp_path / "dirty.py"), "print('dirty')\n")
     editor.setModified(True)
 
@@ -157,7 +172,7 @@ def test_prompt_save_all_respects_cancel_and_save(monkeypatch, qapp, tmp_path):
         lambda *args, **kwargs: QMessageBox.StandardButton.Save,
     )
     assert tabs.prompt_save_all() is True
-    assert parent.saved == 1
+    assert fake_fm.saved == 1
 
     tabs.deleteLater()
     parent.deleteLater()
@@ -166,7 +181,7 @@ def test_prompt_save_all_respects_cancel_and_save(monkeypatch, qapp, tmp_path):
 def test_welcome_tab_reuse_theme_update_close_and_template_signal(qapp, tmp_path):
     settings = make_settings(tmp_path)
     parent = ParentWindow()
-    tabs = TabManager(settings, parent)
+    tabs = TabManager(settings, parent=parent)
 
     welcome = tabs.show_welcome_tab("default_dark", "dark", "#2F7A44")
     same = tabs.show_welcome_tab("custom", "light", "#336699")
@@ -202,7 +217,7 @@ def test_deferred_close_button_closes_editor_on_next_event_loop(monkeypatch, qap
     )
     settings = make_settings(tmp_path)
     parent = ParentWindow()
-    tabs = TabManager(settings, parent)
+    tabs = TabManager(settings, parent=parent)
     editor = tabs.new_tab(str(tmp_path / "deferred.py"), "print('x')\n")
 
     tabs._close_editor_tab(editor)
