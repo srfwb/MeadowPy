@@ -258,7 +258,16 @@ If you're working on MeadowPy itself, use the developer setup path so the test t
 2. Run **`dev\Run Tests.bat`** to execute the full automated test suite with coverage.
 3. If you prefer the terminal, you can also run `.venv\Scripts\python.exe -m pytest -c dev\pytest.ini`.
 
-`dev\Run Tests.bat` forwards extra pytest arguments, so targeted runs like `dev\Run Tests.bat dev\tests\test_settings.py -q` work too.
+When you change code under `meadowpy\`, make sure the change is covered by the test suite before calling it done. Run the relevant tests while you work, run the full suite before committing, and add or update tests whenever the behavior, bug fix, or edge case calls for it.
+
+`dev\Run Tests.bat` forwards extra pytest arguments, so targeted runs like `dev\Run Tests.bat dev\tests\test_settings.py -q` work too. Because project coverage is measured against the full `meadowpy` package, a tiny focused run can pass its tests but still fail the coverage threshold. For quick targeted checks while developing, disable coverage for that run:
+
+```bat
+.venv\Scripts\python.exe -m pytest -c dev\pytest.ini --no-cov dev\tests\test_settings.py -q
+```
+
+Use the normal full-suite command again before you finish so coverage is measured meaningfully.
+
 Coverage is measured across the full `meadowpy` package, including UI modules, controllers, app startup, and editor widgets.
 It generates coverage outputs under the `dev\` folder:
 - `dev\htmlcov\index.html` for the HTML report
